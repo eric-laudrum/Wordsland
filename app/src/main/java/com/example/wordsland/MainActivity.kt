@@ -29,9 +29,12 @@ sealed class CellState {
 }
 class MainActivity : AppCompatActivity() {
     // In your Activity or a ViewModel
-    private val gridSize = 16
-    private val gridModel = Array(gridSize) {
-        Array<CellState>(gridSize) {
+    private val numColumns = 16
+    private val numRows = 20
+
+
+    private val gridModel = Array(numRows) {
+        Array<CellState>(numColumns) {
             CellState.Empty
         }
     }
@@ -51,8 +54,8 @@ class MainActivity : AppCompatActivity() {
 
         gridLayout = findViewById(R.id.grid)
 
-        cellViews = Array(gridSize) {
-            Array(gridSize) {
+        cellViews = Array(numRows) {
+            Array(numColumns) {
                 TextView(this)
             }
         }
@@ -82,8 +85,8 @@ class MainActivity : AppCompatActivity() {
             )
     }
     private fun renderGridFromModel() {
-        for (row in 0 until gridSize) {
-            for (col in 0 until gridSize) {
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
                 val cellView = cellViews[row][col]
                 val cellState = gridModel[row][col]
 
@@ -152,6 +155,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
     private val gridCellDragListener = View.OnDragListener { view, event ->
         val destinationCell = view as TextView
 
@@ -189,12 +193,12 @@ class MainActivity : AppCompatActivity() {
                 // Check where the drag came from
                 when (event.clipDescription.label) {
                     "TRAY_DRAG" -> {
-                        // This is existing logic for dropping a NEW letter from the tray
+                        // Dropping a letter from the tray
                         val item: ClipData.Item = event.clipData.getItemAt(0)
                         val droppedLetter = item.text.toString().first()
                         val letterPosition = event.clipDescription.extras.getInt("position")
 
-                        // Update grid model
+                        // Update grid model TODO: make this work.
                         gridModel[destRow][destCol] = CellState.Letter(droppedLetter)
 
                         // Remove from tray
@@ -240,8 +244,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun findViewCoordinates(view: View): Pair<Int, Int>? {
-        for (row in 0 until gridSize) {
-            for (col in 0 until gridSize) {
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
                 if (cellViews[row][col] == view) {
                     return Pair(row, col)
                 }
@@ -251,8 +255,8 @@ class MainActivity : AppCompatActivity() {
     }
     private fun createVisualGrid() {
         gridLayout.removeAllViews()
-        for (row in 0 until gridSize) {
-            for (col in 0 until gridSize) {
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
                 val cellView = TextView(this).apply {
                     layoutParams = GridLayout.LayoutParams().apply {
                         rowSpec = GridLayout.spec(row, 1, 1f)
@@ -280,15 +284,15 @@ class MainActivity : AppCompatActivity() {
     private fun initializeGridModel() {
 
         // Clear grid to start fresh
-        for (row in 0 until gridSize) {
-            for (col in 0 until gridSize) {
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
                 gridModel[row][col] = CellState.Empty
             }}
 
         // Create a list of all possible coordinates
         val availableCoordinates = mutableListOf<Pair<Int, Int>>()
-        for (row in 0 until gridSize) {
-            for (col in 0 until gridSize) {
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
                 availableCoordinates.add(Pair(row, col))
             }
         }
