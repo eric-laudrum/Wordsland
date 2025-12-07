@@ -6,10 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity"
-    android:orientation="vertical"
     >
-
-
 
     <LinearLayout
         android:id="@+id/header"
@@ -31,29 +28,34 @@
             android:layout_height="wrap_content"
             android:text="Wordsland"
             android:textColor="@color/white"
-            android:textSize="40dp"
+            android:textSize="40sp"
             />
 
     </LinearLayout>
 
-    <GridLayout
+    <androidx.gridlayout.widget.GridLayout
         android:id="@+id/grid"
-        android:layout_width="match_parent"
-        android:layout_height="500dp"
-
-        android:columnCount="16"
-        android:rowCount="16"
-
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:columnCount="16"
+        app:rowCount="16"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/header"
+        app:layout_constraintBottom_toTopOf="@+id/letter_tray_recycler"
+        />
+
+    <!-- RecyclerView for the player's letter tiles -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/letter_tray_recycler"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:clipToPadding="false"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-
-        android:backgroundTint="@android:color/darker_gray"
-        >
-
-
-
-    </GridLayout>
+        app:layout_constraintBottom_toTopOf="@+id/bottom_bar"
+        />
 
     <!-- Bottom buttons -->
     <LinearLayout
@@ -64,6 +66,7 @@
 
         android:gravity="center"
         android:padding="20dp"
+        android:background="@color/black"
 
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
