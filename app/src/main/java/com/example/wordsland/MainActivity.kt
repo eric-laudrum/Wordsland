@@ -17,7 +17,6 @@ import androidx.gridlayout.widget.GridLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
-
 // Features of a single cell in the grid
 sealed class CellState {
     object Empty : CellState()
@@ -25,8 +24,6 @@ sealed class CellState {
     object Target : CellState()
     data class Letter(val char: Char) : CellState()
 }
-
-
 class MainActivity : AppCompatActivity() {
     // In your Activity or a ViewModel
     private val gridSize = 16
@@ -35,15 +32,16 @@ class MainActivity : AppCompatActivity() {
             CellState.Empty
         }
     }
+
+    // Initialize Variables
     private lateinit var gridLayout: GridLayout
     private lateinit var cellViews: Array<Array<TextView>>
-
-    // Letter Tray
     private lateinit var letterTrayRecycler: RecyclerView
     private lateinit var letterTrayAdapter: LetterTrayAdapter
     private val playerLetters = mutableListOf<Char>()
 
 
+    // Create
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -65,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         renderGridFromModel()
     }
 
+    // Functions
     private fun setupLetterTray() {
         // Generate 7 random letters for the player
         for (i in 0 until 7) {
@@ -239,11 +238,8 @@ class MainActivity : AppCompatActivity() {
         gridModel[1][14] = CellState.Obstacle
         gridModel[15][15] = CellState.Target
     }
-
 }
-
-
-
+// Classes
 class LetterTrayAdapter(private val letters: List<Char>) :
     RecyclerView.Adapter<LetterTrayAdapter.LetterViewHolder>() {
 
@@ -309,7 +305,3 @@ class LetterTrayAdapter(private val letters: List<Char>) :
 
     override fun getItemCount() = letters.size
 }
-
-
-
-
