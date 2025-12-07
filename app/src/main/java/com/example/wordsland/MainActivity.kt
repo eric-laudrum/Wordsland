@@ -5,6 +5,7 @@ import android.content.ClipDescription
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
@@ -20,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView
 // Features of a single cell in the grid
 sealed class CellState {
     object Empty : CellState()
+    object Start : CellState()
     object Obstacle : CellState()
     object Target : CellState()
     data class Letter(val char: Char) : CellState()
@@ -97,6 +99,12 @@ class MainActivity : AppCompatActivity() {
                                 android.R.color.darker_gray
                             )
                         )
+                    }
+
+                    is CellState.Start ->{
+                        cellView.text = "S"
+                        background.setTint(Color.CYAN)
+                        cellView.setTextColor(Color.BLACK)
                     }
 
                     is CellState.Obstacle -> {
@@ -231,12 +239,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun initializeGridModel() {
-        // TODO: randomize board
-        // Preset board
-        gridModel[3][3] = CellState.Obstacle
-        gridModel[5][8] = CellState.Obstacle
-        gridModel[1][14] = CellState.Obstacle
-        gridModel[15][15] = CellState.Target
+
+        // Clear grid to start fresh
+        for (row in 0 until gridSize) {
+            for (col in 0 until gridSize) {
+                gridModel[row][col] = CellState.Empty
+            }}
+
+        // Create a list of all possible coordinates
+        val availableCoordinates = mutableListOf<Pair<Int, Int>>()
+        for (row in 0 until gridSize) {
+            for (col in 0 until gridSize) {
+                availableCoordinates.add(Pair(row, col))
+            }
+        }
+        // Shuffle the list to make the selection random.
+        availableCoordinates.shuffle()
+
+        // Place the Start point
+        val startCoords = availableCoordinates.removeAt(0)
+        gridModel[startCoords.first][startCoords.second] = CellState.Start
+
+        // Place the Target point
+        val targetCoords = availableCoordinates.removeAt(0)
+        gridModel[targetCoords.first][targetCoords.second] = CellState.Target
+
+        // Place the Obstacles
+        val numberOfObstacles = 10
+
+        if(availableCoordinates.size < 2 + numberOfObstacles){
+            Log.e("WordsLand", "Error: Grid is too small to place Start, Target, and all Obstacles")
+            return
+        }
+
+        for (i in 0 until numberOfObstacles) {
+            if (availableCoordinates.isEmpty()) break
+
+            val obstacleCoords = availableCoordinates.removeAt(0)
+            gridModel[obstacleCoords.first][obstacleCoords.second] = CellState.Obstacle
+        }
     }
 }
 // Classes
