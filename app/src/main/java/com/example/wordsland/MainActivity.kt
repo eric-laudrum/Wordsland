@@ -5,6 +5,7 @@ import android.content.ClipDescription
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.PersistableBundle
 import android.util.Log
 import android.view.DragEvent
 import android.view.Gravity
@@ -18,7 +19,7 @@ import androidx.gridlayout.widget.GridLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
-// Features of a single cell in the grid
+//  ----------------------  Classes  ----------------------
 sealed class CellState {
     object Empty : CellState()
     object Start : CellState()
@@ -35,7 +36,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Initialize Variables
+    //  ----------------------  Initialize Varibales  ----------------------
     private lateinit var gridLayout: GridLayout
     private lateinit var cellViews: Array<Array<TextView>>
     private lateinit var letterTrayRecycler: RecyclerView
@@ -43,7 +44,7 @@ class MainActivity : AppCompatActivity() {
     private val playerLetters = mutableListOf<Char>()
 
 
-    // Create
+    //  ----------------------  Create  ----------------------
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -65,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         renderGridFromModel()
     }
 
-    // Functions
+    //  ----------------------  Functions  ----------------------
     private fun setupLetterTray() {
         // Generate 7 random letters for the player
         for (i in 0 until 7) {
@@ -87,42 +88,65 @@ class MainActivity : AppCompatActivity() {
                 val cellState = gridModel[row][col]
 
                 // Change colour of the cell
-                val background =
-                    cellView.background.mutate() // Use mutate to avoid changing all instances
+                val background = cellView.background.mutate() // Use mutate to avoid changing all instances
+
+                // Remove long click listener
+                cellView.setOnLongClickListener (null)
+                cellView.isLongClickable = false
+
 
                 when (cellState) {
-                    is CellState.Empty -> {
-                        cellView.text = ""
-                        background.setTint(
-                            ContextCompat.getColor(
-                                this,
-                                android.R.color.darker_gray
-                            )
-                        )
-                    }
+                    is CellState.Empty, is CellState.Start, is CellState.Target, is CellState.Obstacle -> {
+                        // This block handles all non-letter cells
+                        cellView.setTextColor(Color.BLACK) // Default text color
+                        when (cellState) {
+                            is CellState.Empty -> {
+                                cellView.text = ""
+                                background.setTint(ContextCompat.getColor(this, android.R.color.darker_gray))
+                            }
+                            is CellState.Start -> {
+                                cellView.text = "S"
+                                background.setTint(Color.CYAN)
+                            }
+                            is CellState.Target -> {
+                                cellView.text = "T"
+                                background.setTint(Color.GREEN)
+                            }
+                            is CellState.Obstacle -> {
+                                cellView.text = "X"
+                                background.setTint(Color.BLACK)
+                                cellView.setTextColor(Color.WHITE)
+                            }
 
-                    is CellState.Start ->{
-                        cellView.text = "S"
-                        background.setTint(Color.CYAN)
-                        cellView.setTextColor(Color.BLACK)
-                    }
-
-                    is CellState.Obstacle -> {
-                        cellView.text = "X"
-                        background.setTint(Color.BLACK)
-                        cellView.setTextColor(Color.WHITE)
-                    }
-
-                    is CellState.Target -> {
-                        cellView.text = "T"
-                        background.setTint(Color.GREEN)
-                        cellView.setTextColor(Color.BLACK)
+                            is CellState.Letter -> TODO()
+                        }
                     }
 
                     is CellState.Letter -> {
                         cellView.text = cellState.char.toString()
                         background.setTint(Color.YELLOW)
                         cellView.setTextColor(Color.BLACK)
+
+                        // Enable dragging for this letter tile
+                        cellView.setOnLongClickListener { view ->
+                            // The data payload will be the original row and column
+                            val dataString = "$row,$col"
+                            val item = ClipData.Item(dataString)
+                            val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
+
+                            // The label tells our drop listener that this came from the grid
+                            val data = ClipData("GRID_DRAG", mimeTypes, item)
+
+                            val dragShadow = View.DragShadowBuilder(view)
+
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                view.startDragAndDrop(data, dragShadow, view, 0)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                view.startDrag(data, dragShadow, view, 0)
+                            }
+                            true
+                        }
                     }
                 }
             }
@@ -133,67 +157,82 @@ class MainActivity : AppCompatActivity() {
 
         when (event.action) {
             DragEvent.ACTION_DRAG_STARTED -> {
-                // Check if the event has the data we expect (a letter)
-                event.clipDescription.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN)
+                // Accept drags for both TRAY and GRID types
+                val description = event.clipDescription
+                (description.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN)) &&
+                        (description.label == "TRAY_DRAG" || description.label == "GRID_DRAG")
             }
             DragEvent.ACTION_DRAG_ENTERED -> {
-                // Optional: Highlight the cell when a letter is dragged over it
                 destinationCell.alpha = 0.5f
                 true
             }
             DragEvent.ACTION_DRAG_EXITED -> {
-                // Un-highlight when the drag stops
                 destinationCell.alpha = 1.0f
                 true
             }
             DragEvent.ACTION_DROP -> {
-                // The tile is dropped
-                destinationCell.alpha = 1.0f // Reset alpha
+                destinationCell.alpha = 1.0f // Reset appearance
 
-                val item: ClipData.Item = event.clipData.getItemAt(0)
-                val droppedLetter = item.text.toString().first()
-                // Safely get position, provide a default if label is null or not a number
-                val letterPosition = event.clipDescription.label?.toString()?.toIntOrNull() ?: -1
+                val destinationCoords = findViewCoordinates(destinationCell) ?: return@OnDragListener false
+                val (destRow, destCol) = destinationCoords
 
-                if (letterPosition == -1) {
-                    return@OnDragListener false // Invalid drag data, fail the drop
+                // Only allow drops on empty cells
+                if (gridModel[destRow][destCol] !is CellState.Empty) {
+                    Toast.makeText(this, "Cell is not empty!", Toast.LENGTH_SHORT).show()
+                    return@OnDragListener false // Drop failed
                 }
 
-                // Find the coordinates of the destination cell
-                val destinationCoords = findViewCoordinates(destinationCell)
+                // Handle tile drop
+                renderGridFromModel()
+                return@OnDragListener true
 
-                if (destinationCoords != null) {
-                    val (row, col) = destinationCoords
+                // Check where the drag came from
+                when (event.clipDescription.label) {
+                    "TRAY_DRAG" -> {
+                        // This is existing logic for dropping a NEW letter from the tray
+                        val item: ClipData.Item = event.clipData.getItemAt(0)
+                        val droppedLetter = item.text.toString().first()
+                        val letterPosition = event.clipDescription.extras.getInt("position")
 
-                    // Check if the cell is empty
-                    if (gridModel[row][col] is CellState.Empty) {
-                        // Update data model
-                        gridModel[row][col] = CellState.Letter(droppedLetter)
+                        // Update grid model
+                        gridModel[destRow][destCol] = CellState.Letter(droppedLetter)
 
-                        // Update visuals
-                        renderGridFromModel()
-
-                        // Remove letter from player's tray
+                        // Remove from tray
                         if (letterPosition < playerLetters.size) {
                             playerLetters.removeAt(letterPosition)
                             letterTrayAdapter.notifyItemRemoved(letterPosition)
-
-                            // This helps the adapter recalculate subsequent positions
                             letterTrayAdapter.notifyItemRangeChanged(letterPosition, playerLetters.size)
                         }
-                        // Return true for a successful drop
-                        true
-                    } else {
-                        Toast.makeText(this, "Cell is not empty!", Toast.LENGTH_SHORT).show()
-                        // Return false for a failed drop
-                        false
                     }
-                } else {
-                    false
-                }
-            }
+                    "GRID_DRAG" -> {
+                        // Move a letter from another grid cell
+                        val item: ClipData.Item = event.clipData.getItemAt(0)
+                        val sourceCoordsString = item.text.toString().split(",")
+                        val sourceRow = sourceCoordsString[0].toInt()
+                        val sourceCol = sourceCoordsString[1].toInt()
 
+                        // Get the letter from the source cell
+                        val sourceState = gridModel[sourceRow][sourceCol]
+                        if (sourceState is CellState.Letter) {
+                            // Move the letter
+                            gridModel[destRow][destCol] = sourceState // Place it in the new spot
+                            gridModel[sourceRow][sourceCol] = CellState.Empty // Clear the old spot
+                        }
+                    }
+                }
+
+                // Re-render the entire grid to show the changes
+                renderGridFromModel()
+                // Drop successful
+                true
+            }
             DragEvent.ACTION_DRAG_ENDED -> {
+                // Make sure cells are visible after the drag ends
+                if(!event.result){
+                    (event.localState as? View)?.visibility = View.VISIBLE
+                }
+
+                // Successfully ended
                 destinationCell.alpha = 1.0f
                 true
             }
@@ -311,18 +350,23 @@ class LetterTrayAdapter(private val letters: List<Char>) :
 
         // Set up the drag-and-drop starter
         holder.itemView.setOnLongClickListener { view ->
-            // Data to be sent with the drag
-            val clipText = letter.toString()
+            val currentPosition = holder.adapterPosition
+            if (currentPosition == RecyclerView.NO_POSITION) return@setOnLongClickListener false
+
+            val clipText = letters[currentPosition].toString()
             val item = ClipData.Item(clipText)
             val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
 
-            // Pass letter's position to label which to remove
-            val data = ClipData(position.toString(), mimeTypes, item)
+            // We now use the "TRAY_DRAG" label as intended.
+            val data = ClipData("TRAY_DRAG", mimeTypes, item)
 
-            // Shadow of the view being dragged
+            val extras = PersistableBundle()
+            extras.putInt("position", currentPosition)
+            data.description.extras = extras
+
             val dragShadow = View.DragShadowBuilder(view)
 
-            // Start drag
+            // Start the drag. The view passed as the 3rd argument is the `localState`.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 view.startDragAndDrop(data, dragShadow, view, 0)
             } else {
@@ -330,16 +374,8 @@ class LetterTrayAdapter(private val letters: List<Char>) :
                 view.startDrag(data, dragShadow, view, 0)
             }
 
-            // Hide the original view
+            // Make the original view invisible. This is correct.
             view.visibility = View.INVISIBLE
-            true
-        }
-
-        // Reset the visibility if the drag is cancelled
-        holder.itemView.setOnDragListener { view, event ->
-            if (event.action == DragEvent.ACTION_DRAG_ENDED) {
-                view.visibility = View.VISIBLE
-            }
             true
         }
     }
