@@ -11,6 +11,7 @@ import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -54,6 +55,26 @@ class MainActivity : AppCompatActivity() {
 
         gridLayout = findViewById(R.id.grid)
 
+        gridLayout.viewTreeObserver.addOnGlobalLayoutListener (object: ViewTreeObserver .OnGlobalLayoutListener{
+            override fun onGlobalLayout(){
+                // Remove listener to prevent from running multiple times
+                gridLayout.viewTreeObserver.removeOnGlobalLayoutListener ( this )
+
+                // Set size dynamically
+                val totalWidth = gridLayout.width
+                val cellSize = totalWidth / numColumns
+
+                // Initialize Data model for the grid
+                initializeGridModel()
+
+                // Create visual grid using calculated values
+                createVisualGrid(cellSize)
+
+                // Render the initial state of the grid
+                renderGridFromModel()
+            }
+        })
+
         cellViews = Array(numRows) {
             Array(numColumns) {
                 TextView(this)
@@ -64,9 +85,6 @@ class MainActivity : AppCompatActivity() {
         letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
         setupLetterTray()
 
-        initializeGridModel()
-        createVisualGrid() // and drag listener
-        renderGridFromModel()
     }
 
     //  ----------------------  Functions  ----------------------
@@ -253,16 +271,24 @@ class MainActivity : AppCompatActivity() {
         }
         return null
     }
-    private fun createVisualGrid() {
+    private fun createVisualGrid(cellSize: Int) {
         gridLayout.removeAllViews()
+
+        // Set column and row count on Grid
+        gridLayout.rowCount = numRows
+        gridLayout.columnCount = numColumns
+
         for (row in 0 until numRows) {
             for (col in 0 until numColumns) {
                 val cellView = TextView(this).apply {
                     layoutParams = GridLayout.LayoutParams().apply {
+
+                        width = cellSize
+                        height = cellSize
+
                         rowSpec = GridLayout.spec(row, 1, 1f)
                         columnSpec = GridLayout.spec(col, 1, 1f)
-                        width = 0
-                        height = 0
+
                         setMargins(2, 2, 2, 2)
                     }
                     gravity = Gravity.CENTER

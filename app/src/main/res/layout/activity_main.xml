@@ -39,8 +39,7 @@
         android:id="@+id/grid"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:columnCount="16"
-        app:rowCount="16"
+
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/header"
