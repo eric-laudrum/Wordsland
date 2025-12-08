@@ -12,41 +12,38 @@
         android:id="@+id/header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-
         android:background="@color/black"
-
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        android:orientation="horizontal"
         app:layout_constraintEnd_toEndOf="parent"
-
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         >
 
         <EditText
             android:id="@+id/title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="25dp"
             android:text="Wordsland"
             android:textColor="@color/white"
-            android:textSize="40sp"
-            android:layout_marginTop="25dp"
-
-            />
+            android:textSize="40sp" />
 
     </LinearLayout>
 
+
+    <!-- Main Grid -->
     <androidx.gridlayout.widget.GridLayout
         android:id="@+id/grid"
         android:layout_width="0dp"
         android:layout_height="0dp"
 
-        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/header"
         app:layout_constraintBottom_toTopOf="@+id/letter_tray_recycler"
         />
 
-    <!-- RecyclerView for the player's letter tiles -->
+    <!-- Player Tiles -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/letter_tray_recycler"
         android:layout_width="0dp"
@@ -58,17 +55,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         />
-
-
-
-
-
-
-
-
-
-
-
 
 
 

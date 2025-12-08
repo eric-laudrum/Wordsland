@@ -30,8 +30,8 @@ sealed class CellState {
 }
 class MainActivity : AppCompatActivity() {
     // In your Activity or a ViewModel
-    private val numColumns = 16
-    private val numRows = 20
+    private val numColumns = 15
+    private val numRows = 24
 
 
     private val gridModel = Array(numRows) {
@@ -55,30 +55,26 @@ class MainActivity : AppCompatActivity() {
 
         gridLayout = findViewById(R.id.grid)
 
-        gridLayout.viewTreeObserver.addOnGlobalLayoutListener (object: ViewTreeObserver .OnGlobalLayoutListener{
-            override fun onGlobalLayout(){
-                // Remove listener to prevent from running multiple times
-                gridLayout.viewTreeObserver.removeOnGlobalLayoutListener ( this )
+        gridLayout.post {
 
-                // Set size dynamically
-                val totalWidth = gridLayout.width
-                val cellSize = totalWidth / numColumns
+            // 1. Calculate the correct cell size.
+            val maxCellWidth = gridLayout.width / numColumns
+            val maxCellHeight = gridLayout.height / numRows
 
-                // Initialize Data model for the grid
-                initializeGridModel()
+            val cellSize = minOf(maxCellWidth, maxCellHeight)
 
-                // Create visual grid using calculated values
-                createVisualGrid(cellSize)
+            // 2. Set the grid's column and row counts.
+            gridLayout.columnCount = numColumns
+            gridLayout.rowCount = numRows
 
-                // Render the initial state of the grid
-                renderGridFromModel()
-            }
-        })
+            // 3. Initialize the data model.
+            initializeGridModel()
 
-        cellViews = Array(numRows) {
-            Array(numColumns) {
-                TextView(this)
-            }
+            // 4. Create the visual grid with the correct cell size.
+            createVisualGrid(cellSize)
+
+            // 5. Render the final state.
+            renderGridFromModel()
         }
 
         // Letter Tray / RecyclerView
@@ -278,6 +274,13 @@ class MainActivity : AppCompatActivity() {
         gridLayout.rowCount = numRows
         gridLayout.columnCount = numColumns
 
+        cellViews = Array(numRows){
+            Array(numColumns){
+                TextView(this)
+            }
+        }
+
+        // Create Grid
         for (row in 0 until numRows) {
             for (col in 0 until numColumns) {
                 val cellView = TextView(this).apply {
@@ -286,13 +289,13 @@ class MainActivity : AppCompatActivity() {
                         width = cellSize
                         height = cellSize
 
-                        rowSpec = GridLayout.spec(row, 1, 1f)
-                        columnSpec = GridLayout.spec(col, 1, 1f)
+                        rowSpec = GridLayout.spec(row)
+                        columnSpec = GridLayout.spec(col)
 
-                        setMargins(2, 2, 2, 2)
+                        setMargins(0, 0, 0, 0)
                     }
                     gravity = Gravity.CENTER
-                    textSize = 12f
+                    textSize = 8f
                     // Apply the new rounded square background
                     background =
                         ContextCompat.getDrawable(this@MainActivity, R.drawable.cell_background)
