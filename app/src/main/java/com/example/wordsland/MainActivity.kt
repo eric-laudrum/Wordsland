@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -19,6 +20,8 @@ import androidx.core.content.ContextCompat
 import androidx.gridlayout.widget.GridLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.nio.file.Files
+import java.nio.file.Files.lines
 
 //  ----------------------  Classes  ----------------------
 sealed class CellState {
@@ -32,6 +35,8 @@ class MainActivity : AppCompatActivity() {
     // In your Activity or a ViewModel
     private val numColumns = 15
     private val numRows = 24
+
+    private val validWords = mutableSetOf<String>()
 
 
     private val gridModel = Array(numRows) {
@@ -80,6 +85,14 @@ class MainActivity : AppCompatActivity() {
         // Letter Tray / RecyclerView
         letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
         setupLetterTray()
+
+        // Enter word
+        val enterButton: Button = findViewById(R.id.enter_word_button)
+        enterButton.setOnClickListener{
+            // Validate word
+            checkWord()
+        }
+        loadDictionary()
 
     }
 
@@ -169,7 +182,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
     private val gridCellDragListener = View.OnDragListener { view, event ->
         val destinationCell = view as TextView
 
@@ -265,8 +277,6 @@ class MainActivity : AppCompatActivity() {
         }
         return null
     }
-
-
     private fun createVisualGrid(cellSize: Int) {
         gridLayout.removeAllViews()
 
@@ -349,6 +359,82 @@ class MainActivity : AppCompatActivity() {
 
             val obstacleCoords = availableCoordinates.removeAt(0)
             gridModel[obstacleCoords.first][obstacleCoords.second] = CellState.Obstacle
+        }
+    }
+    private fun loadDictionary(){
+        Thread{
+            try{
+                val inputStream = resources.openRawResource(R.raw.dictionary)
+
+                inputStream.bufferedReader().use{reader ->
+                    val lines = reader.readLines()
+
+                    validWords.addAll(lines.map{ it.trim().uppercase() })
+
+                }
+
+                Log.d("Dictionary", "Successfully Loaded ${validWords.size} words.")
+            } catch(e: Exception){
+                Log.d("Dictionary", "Error loading dictionary", e)
+            }
+        }.start()
+    }
+    private fun checkWord(){
+        // Find letters and their coordinates
+        val letterCells = mutableListOf<Pair<Pair<Int, Int>, Char>>()
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
+                val cellState = gridModel[row][col]
+                if (cellState is CellState.Letter) {
+                    letterCells.add(Pair(Pair(row, col), cellState.char))
+                }
+            }
+        }
+
+        // Verify word has at least 2 letters
+        if (letterCells.size < 2) {
+            Toast.makeText(this, "A word needs at least 2 letters!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 2. Check if they form a valid line (horizontal or vertical)
+        val firstRow = letterCells.first().first.first
+        val firstCol = letterCells.first().first.second
+
+        val isHorizontal = letterCells.all { it.first.first == firstRow }
+        val isVertical = letterCells.all { it.first.second == firstCol }
+
+        if (!isHorizontal && !isVertical) {
+            Toast.makeText(this, "Letters must be in a single straight line!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 3. Assemble the word by sorting the letters by their position
+        val sortedLetters = if (isHorizontal) {
+            letterCells.sortedBy { it.first.second } // Sort by column
+        } else {
+            letterCells.sortedBy { it.first.first }  // Sort by row
+        }
+
+        // Check for gaps in the word
+        for(i in 0 until sortedLetters.size - 1){
+            val (pos1, _) = sortedLetters[i]
+            val (pos2, _) = sortedLetters[i+1]
+            val dist = if(isHorizontal) pos2.second - pos1.second else pos2.first - pos1.first
+            if(dist > 1){
+                Toast.makeText(this, "No gaps allowed in a word!", Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
+
+        val word = sortedLetters.joinToString("") { it.second.toString() }
+
+        // 4. Check if the word is in our dictionary
+        if (validWords.contains(word)) {
+            Toast.makeText(this, "'$word' is a valid word!", Toast.LENGTH_LONG).show()
+            // TODO: Add points, remove letters, etc.
+        } else {
+            Toast.makeText(this, "'$word' is not a valid word.", Toast.LENGTH_SHORT).show()
         }
     }
 }
