@@ -188,21 +188,18 @@ class MainActivity : AppCompatActivity() {
                 destinationCell.alpha = 1.0f
                 true
             }
+
             DragEvent.ACTION_DROP -> {
                 destinationCell.alpha = 1.0f // Reset appearance
 
                 val destinationCoords = findViewCoordinates(destinationCell) ?: return@OnDragListener false
                 val (destRow, destCol) = destinationCoords
 
-                // Only allow drops on empty cells
-                if (gridModel[destRow][destCol] !is CellState.Empty) {
+                // Only allow drops on empty cells and the starting tile
+                if (gridModel[destRow][destCol] !is CellState.Empty && gridModel[destRow][destCol] !is CellState.Start ) {
                     Toast.makeText(this, "Cell is not empty!", Toast.LENGTH_SHORT).show()
                     return@OnDragListener false // Drop failed
                 }
-
-                // Handle tile drop
-                renderGridFromModel()
-                return@OnDragListener true
 
                 // Check where the drag came from
                 when (event.clipDescription.label) {
@@ -244,6 +241,7 @@ class MainActivity : AppCompatActivity() {
                 // Drop successful
                 true
             }
+
             DragEvent.ACTION_DRAG_ENDED -> {
                 // Make sure cells are visible after the drag ends
                 if(!event.result){
@@ -267,6 +265,8 @@ class MainActivity : AppCompatActivity() {
         }
         return null
     }
+
+
     private fun createVisualGrid(cellSize: Int) {
         gridLayout.removeAllViews()
 
