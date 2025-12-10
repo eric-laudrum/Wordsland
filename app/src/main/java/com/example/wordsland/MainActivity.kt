@@ -29,7 +29,8 @@ sealed class CellState {
     object Start : CellState()
     object Obstacle : CellState()
     object Target : CellState()
-    data class Letter(val char: Char) : CellState()
+    data class Letter(val char: Char) : CellState() // newly placed letters
+    data class LockedLetter (val char: Char): CellState() // entered words
 }
 class MainActivity : AppCompatActivity() {
     // In your Activity or a ViewModel
@@ -148,35 +149,38 @@ class MainActivity : AppCompatActivity() {
                                 cellView.setTextColor(Color.WHITE)
                             }
 
-                            is CellState.Letter -> TODO()
+                            is CellState.Letter -> {}
+                            is CellState.LockedLetter -> {}
+                            }
                         }
-                    }
 
-                    is CellState.Letter -> {
+                    is CellState.Letter ->{
                         cellView.text = cellState.char.toString()
                         background.setTint(Color.YELLOW)
                         cellView.setTextColor(Color.BLACK)
 
-                        // Enable dragging for this letter tile
-                        cellView.setOnLongClickListener { view ->
-                            // The data payload will be the original row and column
+                        cellView.setOnClickListener { view ->
                             val dataString = "$row,$col"
                             val item = ClipData.Item(dataString)
                             val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
-
-                            // The label tells our drop listener that this came from the grid
                             val data = ClipData("GRID_DRAG", mimeTypes, item)
-
                             val dragShadow = View.DragShadowBuilder(view)
 
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N){
                                 view.startDragAndDrop(data, dragShadow, view, 0)
-                            } else {
+                            } else{
                                 @Suppress("DEPRECATION")
                                 view.startDrag(data, dragShadow, view, 0)
                             }
                             true
                         }
+                    }
+                    // Locked letters
+                    is CellState.LockedLetter ->{
+                        cellView.text = cellState.char.toString()
+                        background.setTint(Color.rgb(204, 184, 73))
+                        cellView.setTextColor(Color.BLACK)
+                        // No onClick listener because its not draggable
                     }
                 }
             }
@@ -445,6 +449,19 @@ class MainActivity : AppCompatActivity() {
         if (validWords.contains(word)) {
             Toast.makeText(this, "'$word' is a valid word!", Toast.LENGTH_LONG).show()
             // TODO: Add points, remove letters, etc.
+            for((coords, char) in sortedLetters){
+                val (row, col) = coords
+                gridModel[row][col] = CellState.LockedLetter(char)
+
+                renderGridFromModel()
+
+                if(!isFirstWordPlayed){
+                    isFirstWordPlayed = true
+                }
+
+                // TODO: deal new letter tiles
+            }
+
         } else {
             Toast.makeText(this, "'$word' is not a valid word.", Toast.LENGTH_SHORT).show()
         }
