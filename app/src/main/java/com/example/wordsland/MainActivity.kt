@@ -396,32 +396,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Verify start point is used
-        if(!isFirstWordPlayed){
-            val startCoords = this.startTileCoords ?: return // safety check
-            val coversStartTile = letterCells.any{ it.first == startCoords }
-
-            if(!coversStartTile){
-                Toast.makeText(this, "The first word must cover the start tile", Toast.LENGTH_LONG).show()
-                return
-            }
-        }
-
         // Verify word has at least 2 letters
         if (letterCells.size < 2) {
             Toast.makeText(this, "A word needs at least 2 letters!", Toast.LENGTH_SHORT).show()
+            renderGridFromModel()
             return
         }
 
         // 2. Check if they form a valid line (horizontal or vertical)
         val firstRow = letterCells.first().first.first
         val firstCol = letterCells.first().first.second
-
         val isHorizontal = letterCells.all { it.first.first == firstRow }
         val isVertical = letterCells.all { it.first.second == firstCol }
 
         if (!isHorizontal && !isVertical) {
             Toast.makeText(this, "Letters must be in a single straight line!", Toast.LENGTH_SHORT).show()
+            renderGridFromModel()
             return
         }
 
@@ -432,39 +422,54 @@ class MainActivity : AppCompatActivity() {
             letterCells.sortedBy { it.first.first }  // Sort by row
         }
 
-        // Check for gaps in the word
-        for(i in 0 until sortedLetters.size - 1){
-            val (pos1, _) = sortedLetters[i]
-            val (pos2, _) = sortedLetters[i+1]
-            val dist = if(isHorizontal) pos2.second - pos1.second else pos2.first - pos1.first
-            if(dist > 1){
-                Toast.makeText(this, "No gaps allowed in a word!", Toast.LENGTH_SHORT).show()
-                return
+
+        val word = sortedLetters.joinToString("") {it.second.toString()}
+
+        val isWordValid = validWords.contains(word)
+        var isPlacementValid = true
+        var placementErrorMsg = "The first word must cover the Start (S) tile!"
+
+
+        // Rule 1: First word must cover the start tile.
+        if (!isFirstWordPlayed) {
+            val startCoords = this.startTileCoords ?: return // Safety check
+            if (sortedLetters.none { it.first == startCoords }) {
+                isPlacementValid = false
+                placementErrorMsg = "The first word must cover the Start (S) tile!"
             }
         }
 
-        val word = sortedLetters.joinToString("") { it.second.toString() }
+        // Rule 2: (Future rule could go here)
+        // For example, subsequent words must connect to locked letters.
 
-        // 4. Check if the word is in our dictionary
-        if (validWords.contains(word)) {
+        // --- FINAL DECISION ---
+        if (isWordValid && isPlacementValid) {
+            // SUCCESS: Lock the word
             Toast.makeText(this, "'$word' is a valid word!", Toast.LENGTH_LONG).show()
-            // TODO: Add points, remove letters, etc.
-            for((coords, char) in sortedLetters){
+
+            for ((coords, char) in sortedLetters) {
                 val (row, col) = coords
                 gridModel[row][col] = CellState.LockedLetter(char)
+            }
 
-                renderGridFromModel()
-
-                if(!isFirstWordPlayed){
-                    isFirstWordPlayed = true
-                }
-
-                // TODO: deal new letter tiles
+            if (!isFirstWordPlayed) {
+                isFirstWordPlayed = true
             }
 
         } else {
-            Toast.makeText(this, "'$word' is not a valid word.", Toast.LENGTH_SHORT).show()
+            // FAILURE: Show the correct error message.
+            if (!isWordValid) {
+                Toast.makeText(this, "'$word' is not a valid word.", Toast.LENGTH_SHORT).show()
+            } else { // This means the word was valid, but placement was wrong.
+                Toast.makeText(this, placementErrorMsg, Toast.LENGTH_LONG).show()
+            }
         }
+
+        // **CRUCIAL FIX**: Always re-render the grid at the end.
+        // If the word was locked, this will draw the locked tiles.
+        // If the submission failed, this will redraw the movable 'Letter' tiles,
+        // which re-attaches their drag listeners and makes them movable again.
+        renderGridFromModel()
     }
 }
 // Classes
