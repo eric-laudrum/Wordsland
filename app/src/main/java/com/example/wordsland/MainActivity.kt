@@ -35,9 +35,9 @@ class MainActivity : AppCompatActivity() {
     // In your Activity or a ViewModel
     private val numColumns = 15
     private val numRows = 24
-
     private val validWords = mutableSetOf<String>()
-
+    private var isFirstWordPlayed = false
+    private var startTileCoords: Pair<Int, Int>? = null
 
     private val gridModel = Array(numRows) {
         Array<CellState>(numColumns) {
@@ -341,6 +341,7 @@ class MainActivity : AppCompatActivity() {
         // Place the Start point
         val startCoords = availableCoordinates.removeAt(0)
         gridModel[startCoords.first][startCoords.second] = CellState.Start
+        this.startTileCoords = startCoords
 
         // Place the Target point
         val targetCoords = availableCoordinates.removeAt(0)
@@ -388,6 +389,17 @@ class MainActivity : AppCompatActivity() {
                 if (cellState is CellState.Letter) {
                     letterCells.add(Pair(Pair(row, col), cellState.char))
                 }
+            }
+        }
+
+        // Verify start point is used
+        if(!isFirstWordPlayed){
+            val startCoords = this.startTileCoords ?: return // safety check
+            val coversStartTile = letterCells.any{ it.first == startCoords }
+
+            if(!coversStartTile){
+                Toast.makeText(this, "The first word must cover the start tile", Toast.LENGTH_LONG).show()
+                return
             }
         }
 
