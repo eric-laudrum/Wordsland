@@ -385,7 +385,7 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
     private fun checkWord(){
-        // Find letters and their coordinates
+        // Find all letters and their coordinates
         val letterCells = mutableListOf<Pair<Pair<Int, Int>, Char>>()
         for (row in 0 until numRows) {
             for (col in 0 until numColumns) {
@@ -396,14 +396,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Verify word has at least 2 letters
+        // Verify word is 2 or more letters
         if (letterCells.size < 2) {
-            Toast.makeText(this, "A word needs at least 2 letters!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Words have to be at least 2 letters!", Toast.LENGTH_SHORT).show()
             renderGridFromModel()
             return
         }
 
-        // 2. Check if they form a valid line (horizontal or vertical)
+        // Verify letters form a valid line (horizontal or vertical)
         val firstRow = letterCells.first().first.first
         val firstCol = letterCells.first().first.second
         val isHorizontal = letterCells.all { it.first.first == firstRow }
@@ -415,34 +415,68 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 3. Assemble the word by sorting the letters by their position
+        // Get and verify word
         val sortedLetters = if (isHorizontal) {
             letterCells.sortedBy { it.first.second } // Sort by column
         } else {
             letterCells.sortedBy { it.first.first }  // Sort by row
         }
 
-
+        // Validate word and placement
         val word = sortedLetters.joinToString("") {it.second.toString()}
-
         val isWordValid = validWords.contains(word)
         var isPlacementValid = true
-        var placementErrorMsg = "The first word must cover the Start (S) tile!"
+        var placementErrorMsg = ""
 
 
-        // Rule 1: First word must cover the start tile.
+        // 1. First word must cover the start tile
+
         if (!isFirstWordPlayed) {
-            val startCoords = this.startTileCoords ?: return // Safety check
-            if (sortedLetters.none { it.first == startCoords }) {
+            val startCoords = this.startTileCoords
+            if (startCoords == null|| sortedLetters.none { it.first == startCoords }) {
                 isPlacementValid = false
                 placementErrorMsg = "The first word must cover the Start (S) tile!"
             }
+        } else{
+            // Verify word is connected to existing tiles
+            var isConnected = false
+
+            // Check new letters
+            for ((coords, _) in sortedLetters){
+                val(row, col) = coords
+
+                val adjacentTiles = listOf(
+                    Pair(row - 1, col),
+                    Pair(row + 1, col),
+                    Pair(row, col - 1),
+                    Pair(row, col + 1 )
+                )
+
+                for((nRow, nCol) in adjacentTiles) {
+                    if( nRow >= 0 &&
+                        nRow < numRows &&
+                        nCol >= 0 &&
+                        nCol < numColumns
+                        ){
+                        if(gridModel[nRow][nCol] is CellState.LockedLetter){
+                            isConnected = true
+                            break
+                        }
+                    }
+                }
+                if(isConnected){
+                    break
+                }
+            }
+
+            if(!isConnected){
+                isPlacementValid = false
+                placementErrorMsg = "Words have to be connected to an existing tile"
+            }
         }
 
-        // Rule 2: (Future rule could go here)
-        // For example, subsequent words must connect to locked letters.
 
-        // --- FINAL DECISION ---
+        // Lock in word placement
         if (isWordValid && isPlacementValid) {
             // SUCCESS: Lock the word
             Toast.makeText(this, "'$word' is a valid word!", Toast.LENGTH_LONG).show()
@@ -457,18 +491,15 @@ class MainActivity : AppCompatActivity() {
             }
 
         } else {
-            // FAILURE: Show the correct error message.
+            // FAILURE: Show error message.
             if (!isWordValid) {
                 Toast.makeText(this, "'$word' is not a valid word.", Toast.LENGTH_SHORT).show()
-            } else { // This means the word was valid, but placement was wrong.
+            } else { // Word is valid, but placement is wrong.
                 Toast.makeText(this, placementErrorMsg, Toast.LENGTH_LONG).show()
             }
         }
 
-        // **CRUCIAL FIX**: Always re-render the grid at the end.
-        // If the word was locked, this will draw the locked tiles.
-        // If the submission failed, this will redraw the movable 'Letter' tiles,
-        // which re-attaches their drag listeners and makes them movable again.
+        // Always re-render the grid at the end.
         renderGridFromModel()
     }
 }
