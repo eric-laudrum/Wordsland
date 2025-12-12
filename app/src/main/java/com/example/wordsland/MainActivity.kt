@@ -60,31 +60,29 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         gridLayout = findViewById(R.id.grid)
+        letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
 
         gridLayout.post {
-
-            // 1. Calculate the correct cell size.
+            // Calculate cell size.
             val maxCellWidth = gridLayout.width / numColumns
             val maxCellHeight = gridLayout.height / numRows
-
             val cellSize = minOf(maxCellWidth, maxCellHeight)
 
-            // 2. Set the grid's column and row counts.
+            // Set Column and Row counts based on cell size
             gridLayout.columnCount = numColumns
             gridLayout.rowCount = numRows
 
-            // 3. Initialize the data model.
+            // Initialize the data model.
             initializeGridModel()
 
-            // 4. Create the visual grid with the correct cell size.
+            // Create the grid
             createVisualGrid(cellSize)
 
-            // 5. Render the final state.
-            renderGridFromModel()
+            // Render the final state.
+            render()
         }
 
         // Letter Tray / RecyclerView
-        letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
         setupLetterTray()
 
         // Enter word
@@ -99,10 +97,15 @@ class MainActivity : AppCompatActivity() {
 
     //  ----------------------  Functions  ----------------------
     private fun setupLetterTray() {
-        // Generate 7 random letters for the player
-        for (i in 0 until 7) {
-            playerLetters.add(('A'..'Z').random())
+        // Generate 7 random letters for the player's hand
+
+        // Generate new hand
+        if(playerLetters.isEmpty()){
+            for (i in 0 until 7) {
+                playerLetters.add(('A'..'Z').random())
+            }
         }
+
         // Setup RecyclerView
         letterTrayAdapter = LetterTrayAdapter(playerLetters)
         letterTrayRecycler.adapter = letterTrayAdapter
@@ -112,7 +115,19 @@ class MainActivity : AppCompatActivity() {
                 LinearLayoutManager.HORIZONTAL, false
             )
     }
+
+    private fun renderLetterTray(){
+        // If the Adapter hasn't been created, do skip
+        if(!::letterTrayAdapter.isInitialized) return
+
+        // Update adapter on change
+        letterTrayAdapter.notifyDataSetChanged()
+    }
+
     private fun renderGridFromModel() {
+        //
+        if(!::cellViews.isInitialized) return
+
         for (row in 0 until numRows) {
             for (col in 0 until numColumns) {
                 val cellView = cellViews[row][col]
@@ -123,8 +138,6 @@ class MainActivity : AppCompatActivity() {
 
                 // Remove long click listener
                 cellView.setOnLongClickListener (null)
-                cellView.isLongClickable = false
-
 
                 when (cellState) {
                     is CellState.Empty, is CellState.Start, is CellState.Target, is CellState.Obstacle -> {
@@ -133,50 +146,59 @@ class MainActivity : AppCompatActivity() {
                         when (cellState) {
                             is CellState.Empty -> {
                                 cellView.text = ""
-                                background.setTint(ContextCompat.getColor(this, android.R.color.darker_gray))
+                                background.setTint(
+                                    ContextCompat.getColor(
+                                        this,
+                                        android.R.color.darker_gray
+                                    )
+                                )
                             }
+
                             is CellState.Start -> {
                                 cellView.text = "S"
                                 background.setTint(Color.CYAN)
                             }
+
                             is CellState.Target -> {
                                 cellView.text = "T"
                                 background.setTint(Color.GREEN)
                             }
+
                             is CellState.Obstacle -> {
                                 cellView.text = "X"
                                 background.setTint(Color.BLACK)
                                 cellView.setTextColor(Color.WHITE)
                             }
 
-                            is CellState.Letter -> {}
-                            is CellState.LockedLetter -> {}
-                            }
+                            else -> {}
                         }
+                    }
 
-                    is CellState.Letter ->{
+                    is CellState.Letter -> {
                         cellView.text = cellState.char.toString()
                         background.setTint(Color.YELLOW)
                         cellView.setTextColor(Color.BLACK)
 
-                        cellView.setOnClickListener { view ->
+                        cellView.setOnLongClickListener { view ->
                             val dataString = "$row,$col"
                             val item = ClipData.Item(dataString)
+
                             val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
                             val data = ClipData("GRID_DRAG", mimeTypes, item)
-                            val dragShadow = View.DragShadowBuilder(view)
 
-                            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N){
+                            val dragShadow = View.DragShadowBuilder(view)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                                 view.startDragAndDrop(data, dragShadow, view, 0)
-                            } else{
+                            } else {
                                 @Suppress("DEPRECATION")
                                 view.startDrag(data, dragShadow, view, 0)
                             }
+                            // Consume listener
                             true
                         }
                     }
                     // Locked letters
-                    is CellState.LockedLetter ->{
+                    is CellState.LockedLetter -> {
                         cellView.text = cellState.char.toString()
                         background.setTint(Color.rgb(204, 184, 73))
                         cellView.setTextColor(Color.BLACK)
@@ -228,12 +250,10 @@ class MainActivity : AppCompatActivity() {
                         // Update grid model TODO: make this work.
                         gridModel[destRow][destCol] = CellState.Letter(droppedLetter)
 
-                        // Remove from tray
-                        if (letterPosition < playerLetters.size) {
+                        if(letterPosition < playerLetters.size){
                             playerLetters.removeAt(letterPosition)
-                            letterTrayAdapter.notifyItemRemoved(letterPosition)
-                            letterTrayAdapter.notifyItemRangeChanged(letterPosition, playerLetters.size)
                         }
+
                     }
                     "GRID_DRAG" -> {
                         // Move a letter from another grid cell
@@ -253,7 +273,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // Re-render the entire grid to show the changes
-                renderGridFromModel()
+                render()
                 // Drop successful
                 true
             }
@@ -399,7 +419,7 @@ class MainActivity : AppCompatActivity() {
         // Verify word is 2 or more letters
         if (letterCells.size < 2) {
             Toast.makeText(this, "Words have to be at least 2 letters!", Toast.LENGTH_SHORT).show()
-            renderGridFromModel()
+            render()
             return
         }
 
@@ -411,7 +431,7 @@ class MainActivity : AppCompatActivity() {
 
         if (!isHorizontal && !isVertical) {
             Toast.makeText(this, "Letters must be in a single straight line!", Toast.LENGTH_SHORT).show()
-            renderGridFromModel()
+            render()
             return
         }
 
@@ -499,8 +519,52 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Always re-render the grid at the end.
+        render()
+    }
+
+    private fun renderCell(row: Int, col: Int){
+        val cellView = cellViews[row][col]
+        val cellState = gridModel[row][col]
+        val background = cellView.background.mutate()
+
+        // Reset cell's listener
+        cellView.setOnLongClickListener(null)
+
+        when(cellState){
+            is CellState.Letter->{
+                cellView.text = cellState.char.toString()
+                background.setTint(Color.YELLOW)
+                cellView.setTextColor(Color.BLACK)
+
+                // Reapply drag listener for this tile
+                cellView.setOnLongClickListener { view ->
+                    val dataString = "$row,$col"
+                    val item = ClipData.Item(dataString)
+                    val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
+                    val data = ClipData("GRID_DRAG", mimeTypes, item)
+                    val dragShadow = View.DragShadowBuilder(view)
+                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N){
+                        view.startDragAndDrop(data, dragShadow, view, 0)
+                    } else{
+                        @Suppress("DEPRECATION")
+                        view.startDrag(data, dragShadow, view, 0)
+                    }
+                    true
+                }
+            }
+            is CellState.Empty ->{
+                cellView.text = ""
+                background.setTint(ContextCompat.getColor(this, android.R.color.darker_gray))
+
+            }
+            else -> {
+                // tbd
+            }
+        }
+    }
+    private fun render(){
         renderGridFromModel()
+        renderLetterTray()
     }
 }
 // Classes
