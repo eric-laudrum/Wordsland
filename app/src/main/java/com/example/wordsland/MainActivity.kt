@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private val validWords = mutableSetOf<String>()
     private var isFirstWordPlayed = false
     private var startTileCoords: Pair<Int, Int>? = null
+    private val tileBag = mutableListOf<Char>()
 
     private val gridModel = Array(numRows) {
         Array<CellState>(numColumns) {
@@ -58,6 +59,16 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        initializeTileBag()
+
+        // Draw first hand
+        if(playerLetters.isEmpty()){
+            val lettersToDraw = minOf(7, tileBag.size)
+            for(i in 0 until lettersToDraw){
+                playerLetters.add(tileBag.removeAt(0))
+            }
+        }
 
         gridLayout = findViewById(R.id.grid)
         letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
@@ -82,9 +93,6 @@ class MainActivity : AppCompatActivity() {
             render()
         }
 
-        // Letter Tray / RecyclerView
-        setupLetterTray()
-
         // Enter word
         val enterButton: Button = findViewById(R.id.enter_word_button)
         enterButton.setOnClickListener{
@@ -96,34 +104,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     //  ----------------------  Functions  ----------------------
-    private fun setupLetterTray() {
-        // Generate 7 random letters for the player's hand
+    private fun initializeTileBag(){
+        tileBag.clear()
 
-        // Generate new hand
-        if(playerLetters.isEmpty()){
-            for (i in 0 until 7) {
-                playerLetters.add(('A'..'Z').random())
+        val tileDistribution = mapOf(
+            'A' to 18, 'B' to 4, 'C' to 4, 'D' to 8, 'E' to 24, 'F' to 4,
+            'G' to 6, 'H' to 4, 'I' to 18, 'J' to 2, 'K' to 2, 'L' to 8,
+            'M' to 4, 'N' to 12, 'O' to 16, 'P' to 4, 'Q' to 2, 'R' to 12,
+            'S' to 8, 'T' to 12, 'U' to 8, 'V' to 4, 'W' to 4, 'X' to 2,
+            'Y' to 4, 'Z' to 2
+        )
+        for ((letter, count) in tileDistribution){
+            repeat(count){
+                tileBag.add(letter)
             }
         }
-
-        // Setup RecyclerView
-        letterTrayAdapter = LetterTrayAdapter(playerLetters)
-        letterTrayRecycler.adapter = letterTrayAdapter
-        letterTrayRecycler.layoutManager =
-            LinearLayoutManager(
-                this,
-                LinearLayoutManager.HORIZONTAL, false
-            )
+        tileBag.shuffle()
+        Log.d("TileBag", "Initialized tile bag with ${tileBag.size} tiles")
     }
-
-    private fun renderLetterTray(){
-        // If the Adapter hasn't been created, do skip
-        if(!::letterTrayAdapter.isInitialized) return
-
-        // Update adapter on change
-        letterTrayAdapter.notifyDataSetChanged()
-    }
-
     private fun renderGridFromModel() {
         //
         if(!::cellViews.isInitialized) return
@@ -510,6 +508,21 @@ class MainActivity : AppCompatActivity() {
                 isFirstWordPlayed = true
             }
 
+            val lettersUsedCount = sortedLetters.size
+            val lettersToDraw = minOf(lettersUsedCount, tileBag.size)
+
+            if (lettersToDraw > 0){
+                Log.d("Game", "Player used $lettersUsedCount lettsrs. Drawing $lettersToDraw new ones.")
+                for(i in 0 until lettersToDraw){
+                    // Add new letter to player's hand
+                    playerLetters.add(tileBag.removeAt(0))
+
+                }
+            } else if( tileBag.isEmpty()){
+                Log.d("Game", "The tile bag is empty. There are no more letters to draw")
+            }
+
+
         } else {
             // FAILURE: Show error message.
             if (!isWordValid) {
@@ -521,50 +534,17 @@ class MainActivity : AppCompatActivity() {
 
         render()
     }
-
-    private fun renderCell(row: Int, col: Int){
-        val cellView = cellViews[row][col]
-        val cellState = gridModel[row][col]
-        val background = cellView.background.mutate()
-
-        // Reset cell's listener
-        cellView.setOnLongClickListener(null)
-
-        when(cellState){
-            is CellState.Letter->{
-                cellView.text = cellState.char.toString()
-                background.setTint(Color.YELLOW)
-                cellView.setTextColor(Color.BLACK)
-
-                // Reapply drag listener for this tile
-                cellView.setOnLongClickListener { view ->
-                    val dataString = "$row,$col"
-                    val item = ClipData.Item(dataString)
-                    val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
-                    val data = ClipData("GRID_DRAG", mimeTypes, item)
-                    val dragShadow = View.DragShadowBuilder(view)
-                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N){
-                        view.startDragAndDrop(data, dragShadow, view, 0)
-                    } else{
-                        @Suppress("DEPRECATION")
-                        view.startDrag(data, dragShadow, view, 0)
-                    }
-                    true
-                }
-            }
-            is CellState.Empty ->{
-                cellView.text = ""
-                background.setTint(ContextCompat.getColor(this, android.R.color.darker_gray))
-
-            }
-            else -> {
-                // tbd
-            }
-        }
-    }
     private fun render(){
         renderGridFromModel()
-        renderLetterTray()
+
+        letterTrayAdapter = LetterTrayAdapter(playerLetters)
+        letterTrayRecycler.adapter = letterTrayAdapter
+        letterTrayRecycler.layoutManager =
+            LinearLayoutManager(
+                this,
+                LinearLayoutManager.HORIZONTAL,
+                false
+            )
     }
 }
 // Classes
