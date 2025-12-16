@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    //  ----------------------  Initialize Varibales  ----------------------
+    //  ----------------------  Properties  ----------------------
     private lateinit var gridLayout: GridLayout
     private lateinit var cellViews: Array<Array<TextView>>
     private lateinit var letterTrayRecycler: RecyclerView
@@ -59,6 +59,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Set views
+        gridLayout = findViewById(R.id.grid)
+        letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
+        val enterButton: Button = findViewById(R.id.enter_word_button)
+        val returnButton: Button = findViewById(R.id.return_tiles_button)
+
         initializeTileBag()
 
         // Draw first hand
@@ -69,10 +75,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        gridLayout = findViewById(R.id.grid)
-        letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
+        // Initialize and set up the RecyclerView Adapter
+        letterTrayAdapter = LetterTrayAdapter(playerLetters.toMutableList())
+        letterTrayRecycler.adapter = letterTrayAdapter
+        letterTrayRecycler.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+
+        // Set Listeners
         letterTrayRecycler.setOnDragListener(letterTrayDragListener)
 
+        enterButton.setOnClickListener{
+            checkWord()
+        }
+
+        returnButton.setOnClickListener{
+            recallLetters()
+        }
+
+        // Create grid & perform final render
         gridLayout.post {
             // Calculate cell size.
             val maxCellWidth = gridLayout.width / numColumns
@@ -93,14 +112,8 @@ class MainActivity : AppCompatActivity() {
             render()
         }
 
-        // Enter word
-        val enterButton: Button = findViewById(R.id.enter_word_button)
-        enterButton.setOnClickListener{
-            // Validate word
-            checkWord()
-        }
+        // Load dictionary in the background
         loadDictionary()
-
     }
 
     //  ----------------------  Functions  ----------------------
@@ -479,14 +492,10 @@ class MainActivity : AppCompatActivity() {
     private fun render(){
         renderGridFromModel()
 
-        letterTrayAdapter = LetterTrayAdapter(playerLetters)
-        letterTrayRecycler.adapter = letterTrayAdapter
-        letterTrayRecycler.layoutManager =
-            LinearLayoutManager(
-                this,
-                LinearLayoutManager.HORIZONTAL,
-                false
-            )
+        // Update data in adapter
+        if (::letterTrayAdapter.isInitialized) {
+            letterTrayAdapter.updateLetters(playerLetters)
+        }
     }
     private val gridCellDragListener = View.OnDragListener { view, event ->
         val destinationCell = view as TextView
@@ -527,12 +536,16 @@ class MainActivity : AppCompatActivity() {
                         val droppedLetter = item.text.toString().first()
                         val letterPosition = event.clipDescription.extras.getInt("position")
 
-                        // Update grid model TODO: make this work.
+                        // Update grid model
                         gridModel[destRow][destCol] = CellState.Letter(droppedLetter)
 
-                        if(letterPosition < playerLetters.size){
+                        // Remove the letter from the player's hand data source.
+                        if (letterPosition < playerLetters.size) {
                             playerLetters.removeAt(letterPosition)
                         }
+
+                        // Re-render
+                        render()
 
                     }
                     "GRID_DRAG" -> {
@@ -630,12 +643,55 @@ class MainActivity : AppCompatActivity() {
             else -> false
         }
     }
+    private fun recallLetters(){
+        // Temp list to hold letters being recalled
+        val recalledLetters = mutableListOf<Char>()
+
+        // Iterate through grid
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
+                val cellState = gridModel[row][col]
+
+                // Check if cell contains a new letter
+                if (cellState is CellState.Letter) {
+                    // Add the letter to temporary list
+                    recalledLetters.add(cellState.char)
+
+                    // Check if this position is the original Start tile's position
+                    if (startTileCoords?.first == row && startTileCoords?.second == col) {
+                        gridModel[row][col] = CellState.Start
+                    } else {
+                        gridModel[row][col] = CellState.Empty
+                    }
+                }
+            }
+        }
+
+        // Recall letters
+        if(recalledLetters.isNotEmpty()){
+            // Add recalled letters back to hand
+            playerLetters.addAll(recalledLetters)
+
+            Toast.makeText(this, "Tiles returned to your hand", Toast.LENGTH_SHORT).show()
+            render() // Update grid and letter tray
+        } else{
+            Toast.makeText(this, "No tiles to recall", Toast.LENGTH_SHORT).show()
+        }
+    }
 }
 // Classes
-class LetterTrayAdapter(private val letters: List<Char>) :
+class LetterTrayAdapter(private val letters: MutableList<Char>) :
     RecyclerView.Adapter<LetterTrayAdapter.LetterViewHolder>() {
-
     class LetterViewHolder(val textView: TextView) : RecyclerView.ViewHolder(textView)
+
+    fun updateLetters(newLetters: List<Char>) {
+        // Clear the adapter's internal list
+        this.letters.clear()
+        // Add all the items from the new list
+        this.letters.addAll(newLetters)
+        // Notify the RecyclerView that the data has changed
+        notifyDataSetChanged()
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LetterViewHolder {
         val context = parent.context
