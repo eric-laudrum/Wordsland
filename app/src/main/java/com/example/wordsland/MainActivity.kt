@@ -16,7 +16,9 @@ import android.view.ViewTreeObserver
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.ui.semantics.dismiss
 import androidx.core.content.ContextCompat
 import androidx.gridlayout.widget.GridLayout
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -488,6 +490,18 @@ class MainActivity : AppCompatActivity() {
             newLetterCells.forEach { (coords, char) -> gridModel[coords.first][coords.second] = CellState.LockedLetter(char) }
             isFirstWordPlayed = true
 
+            // Get the original coordinates of the Target tile.
+            val targetCoords = Pair(0, numColumns - 1) // Must match what's in initializeGridModel()
+
+            // Check if any of the newly placed letters are on the target tile's coordinates.
+            val hasReachedTarget = newLetterCells.any { (coords, _) -> coords == targetCoords }
+
+            if (hasReachedTarget) {
+                // GAME OVER!
+                showGameOverDialog()
+                return // Stop further execution, like rendering.
+            }
+
             // Replenish player's hand up to 7 tiles
             val tilesNeeded = handSize - playerLetters.size
             val lettersToDraw = minOf(tilesNeeded, tileBag.size)
@@ -539,6 +553,22 @@ class MainActivity : AppCompatActivity() {
             letterTrayAdapter.updateLetters(playerLetters.toList())
         }
     }
+    private fun showGameOverDialog() {
+        // Announce winner with AlertDialog
+        AlertDialog.Builder(this)
+            .setTitle("Congratulations!")
+            .setMessage("You have reached the target and won the game!")
+            .setPositiveButton("Play Again") { _, _ ->
+                // TODO: Add logic to restart the game.
+                recreate() // Simple way to restart the activity.
+            }
+            .setNegativeButton("Close") { dialog, _ ->
+                dialog.dismiss()
+                finish() // Close the app.
+            }
+            .setCancelable(false) // Prevent user from dismissing the dialog by tapping outside.
+            .show()
+    }
     private val gridCellDragListener = View.OnDragListener { view, event ->
         val destinationCell = view as TextView
 
@@ -563,8 +593,14 @@ class MainActivity : AppCompatActivity() {
                 val destinationCoords = findViewCoordinates(destinationCell) ?: return@OnDragListener false
                 val (destRow, destCol) = destinationCoords
 
-                // Only allow drops on empty cells and the starting tile
-                if (gridModel[destRow][destCol] !is CellState.Empty && gridModel[destRow][destCol] !is CellState.Start) {
+                // Get the state of the cell we're dropping onto
+                val destinationState = gridModel[destRow][destCol]
+
+                // Check if the destination is a valid (Empty, Start, or Target tile)
+                if (destinationState !is CellState.Empty &&
+                    destinationState !is CellState.Start &&
+                    destinationState !is CellState.Target) {
+                    // If it's none, reject drop
                     return@OnDragListener false
                 }
 
