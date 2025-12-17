@@ -35,6 +35,7 @@ sealed class CellState {
 }
 class MainActivity : AppCompatActivity() {
     // In your Activity or a ViewModel
+    private val handSize = 8
     private val numColumns = 15
     private val numRows = 24
     private val validWords = mutableSetOf<String>()
@@ -62,58 +63,56 @@ class MainActivity : AppCompatActivity() {
 
         // Set views
         gridLayout = findViewById(R.id.grid)
-        letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
+
+        letterTrayRecyclerView = findViewById(R.id.letter_tray_recycler)
         val enterButton: Button = findViewById(R.id.enter_word_button)
         val returnButton: Button = findViewById(R.id.return_tiles_button)
 
         initializeTileBag()
 
         // Draw first hand
-        if(playerLetters.isEmpty()){
-            val lettersToDraw = minOf(7, tileBag.size)
-            for(i in 0 until lettersToDraw){
+        if (playerLetters.isEmpty()) {
+            val lettersToDraw = minOf(handSize, tileBag.size)
+            repeat(lettersToDraw) {
                 playerLetters.add(tileBag.removeAt(0))
             }
         }
 
-        // Initialize and set up the RecyclerView Adapter
-        letterTrayAdapter = LetterTrayAdapter(playerLetters.toMutableList())
-        letterTrayRecycler.adapter = letterTrayAdapter
-        letterTrayRecycler.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        // Initialize the adapter with the starting hand.
+        letterTrayAdapter = LetterTrayAdapter(playerLetters)
+        // Set the adapter on the RecyclerView.
+        letterTrayRecyclerView.adapter = letterTrayAdapter
+        // Set the layout manager (how the items are arranged).
+        letterTrayRecyclerView.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
 
-        // Set Listeners
-        letterTrayRecycler.setOnDragListener(letterTrayDragListener)
 
-        enterButton.setOnClickListener{
+        // --- 4. SET LISTENERS ---
+        letterTrayRecyclerView.setOnDragListener(letterTrayDragListener) // For dropping tiles back onto the tray.
+        enterButton.setOnClickListener {
             checkWord()
         }
-
-        returnButton.setOnClickListener{
+        returnButton.setOnClickListener {
             recallLetters()
         }
 
-        // Create grid & perform final render
+        // --- 5. CREATE GRID & PERFORM FINAL RENDER ---
+        // This gridLayout.post block is an excellent way to ensure the grid has been measured.
         gridLayout.post {
-            // Calculate cell size.
             val maxCellWidth = gridLayout.width / numColumns
             val maxCellHeight = gridLayout.height / numRows
             val cellSize = minOf(maxCellWidth, maxCellHeight)
 
-            // Set Column and Row counts based on cell size
             gridLayout.columnCount = numColumns
             gridLayout.rowCount = numRows
 
-            // Initialize the data model.
             initializeGridModel()
-
-            // Create the grid
             createVisualGrid(cellSize)
 
-            // Render the final state.
+            // The first render call which will draw both the grid and the letter tray correctly.
             render()
         }
 
-        // Load dictionary in the background
+        // Load the dictionary in the background.
         loadDictionary()
     }
 
@@ -490,7 +489,7 @@ class MainActivity : AppCompatActivity() {
             isFirstWordPlayed = true
 
             // Replenish player's hand up to 7 tiles
-            val tilesNeeded = 7 - playerLetters.size
+            val tilesNeeded = handSize - playerLetters.size
             val lettersToDraw = minOf(tilesNeeded, tileBag.size)
             if (lettersToDraw > 0) {
                 repeat(lettersToDraw) { playerLetters.add(tileBag.removeAt(0)) }
@@ -663,75 +662,5 @@ class MainActivity : AppCompatActivity() {
             else -> false
         }
     }
-}
-// Classes
-class LetterTrayAdapter(private val letters: MutableList<Char>) :
-    RecyclerView.Adapter<LetterTrayAdapter.LetterViewHolder>() {
-    class LetterViewHolder(val textView: TextView) : RecyclerView.ViewHolder(textView)
-
-    fun updateLetters(newLetters: List<Char>) {
-        // Clear the adapter's internal list
-        this.letters.clear()
-        // Add all the items from the new list
-        this.letters.addAll(newLetters)
-        // Notify the RecyclerView that the data has changed
-        notifyDataSetChanged()
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LetterViewHolder {
-        val context = parent.context
-        val textView = TextView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                150,
-                150
-            )
-            gravity = Gravity.CENTER
-            textSize = 24f
-            setTextColor(Color.BLACK)
-
-            // Use same tile shape for cell
-            background = ContextCompat.getDrawable(context, R.drawable.cell_background)
-            // Set initial color
-            background.mutate().setTint(Color.LTGRAY)
-        }
-        return LetterViewHolder(textView)
-    }
-
-    override fun onBindViewHolder(holder: LetterViewHolder, position: Int) {
-        val letter = letters[position]
-        holder.textView.text = letter.toString()
-
-        holder.textView.setOnTouchListener { view, event ->
-            if (event.action == MotionEvent.ACTION_DOWN) {
-                val letterChar = (view as TextView).text.toString()
-
-                // Prepare the data to be dragged
-                val clipText = letterChar
-                val item = ClipData.Item(clipText)
-                val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
-                val clipData = ClipData("TRAY_DRAG", mimeTypes, item)
-
-                // Add the letter's position to the ClipData so we know which one to remove later.
-                val extras = PersistableBundle().apply { putInt("position", holder.adapterPosition) }
-                clipData.description.extras = extras
-
-                // Instantiate the drag shadow builder.
-                val dragShadow = View.DragShadowBuilder(view)
-
-                // Start the drag.
-                view.startDragAndDrop(clipData, dragShadow, view, 0)
-
-                // Hide the original view immediately to give the feel of "picking it up".
-                view.visibility = View.INVISIBLE
-
-                // Return true to indicate we've handled the touch event.
-                true
-            } else {
-                // Return false for all other touch actions so they are not consumed.
-                false
-            }
-        }
-    }
-
-    override fun getItemCount() = letters.size
+    private lateinit var letterTrayRecyclerView: RecyclerView
 }

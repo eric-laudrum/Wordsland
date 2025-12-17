@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.example.wordsland.TileView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tile_text_view"
+    android:layout_width="45dp"
+    android:layout_height="45dp"
+    android:layout_margin="2dp"
+    android:gravity="center"
+    android:textColor="@android:color/black"
+    android:textSize="22sp"
+    android:textStyle="bold"
+    android:background="@drawable/tile"
+    android:clickable="true"
+    android:focusable="true"
+    />

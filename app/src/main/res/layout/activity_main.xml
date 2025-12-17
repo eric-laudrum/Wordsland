@@ -46,9 +46,11 @@
     <!-- Player Tiles -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/letter_tray_recycler"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:padding="8dp"
+        android:overScrollMode="never"
+
+
         android:clipToPadding="false"
         android:layout_marginBottom="25dp"
         app:layout_constraintStart_toStartOf="parent"
