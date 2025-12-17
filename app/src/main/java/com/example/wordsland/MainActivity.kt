@@ -9,6 +9,7 @@ import android.os.PersistableBundle
 import android.util.Log
 import android.view.DragEvent
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -332,169 +333,211 @@ class MainActivity : AppCompatActivity() {
             }
         }.start()
     }
-    private fun checkWord(){
-        // Find all letters and their coordinates
-        val letterCells = mutableListOf<Pair<Pair<Int, Int>, Char>>()
+    private fun checkWord() {
+        // Get all newly placed letters.
+        val newLetterCells = mutableListOf<Pair<Pair<Int, Int>, Char>>()
         for (row in 0 until numRows) {
             for (col in 0 until numColumns) {
-                val cellState = gridModel[row][col]
-                if (cellState is CellState.Letter) {
-                    letterCells.add(Pair(Pair(row, col), cellState.char))
+                if (gridModel[row][col] is CellState.Letter) {
+                    newLetterCells.add(Pair(Pair(row, col), (gridModel[row][col] as CellState.Letter).char))
                 }
             }
         }
 
-        // Initial validation
-        if(letterCells.isEmpty()){
+        // If no new letters were placed, notify player and exit
+        if (newLetterCells.isEmpty()) {
             Toast.makeText(this, "Place some letters to start", Toast.LENGTH_SHORT).show()
-            render()
             return
         }
 
-        // Verify letters form a valid line (horizontal or vertical)
-        val firstRow = letterCells.first().first.first
-        val firstCol = letterCells.first().first.second
-        val isHorizontal = letterCells.all { it.first.first == firstRow }
-        val isVertical = letterCells.all { it.first.second == firstCol }
+        // Determine word orientation based on the new letters.
+        val isHorizontal = newLetterCells.all { it.first.first == newLetterCells.first().first.first }
+        val isVertical = newLetterCells.all { it.first.second == newLetterCells.first().first.second }
 
+        // If letters are not in a straight line -> Reject placement
         if (!isHorizontal && !isVertical) {
             Toast.makeText(this, "Letters must be in a single straight line!", Toast.LENGTH_SHORT).show()
-            render()
-            return
+            return // On failure, do nothing & prevent final render() from being called
         }
 
-        // Word assembly
-        val newWord = StringBuilder()
-
+        // Build the full word including any connected existing letters
+        val (startCellRow, startCellCol) = newLetterCells.first().first
         val allWordCells = mutableListOf<Pair<Pair<Int, Int>, Char>>()
-        var lockedLettersUsed = 0
+        val wordBuilder = StringBuilder()
 
-        // Horizontal Line
-        if(isHorizontal){
-            val row = firstRow
-            var currentCol = letterCells.minByOrNull{it.first.second}!!.first.second
-
-            // Scan left from first new letter
-            while(currentCol > 0 && gridModel[row][currentCol - 1] is CellState.LockedLetter){
-                currentCol--
-            }
-            // Scan right from first new letter
-            while(currentCol < numColumns){
-                when(val cellState = gridModel[row][currentCol]){
-                    is CellState.Letter ->{
-                        newWord.append(cellState.char)
-                        allWordCells.add(Pair(Pair(row, currentCol), cellState.char))
-                    }
-                    is CellState.LockedLetter -> {
-                        newWord.append(cellState.char)
-                        lockedLettersUsed++
-                    }
-                    else ->{
-                        break // Stop at the first empty cell or obstacle
-                    }
+        if (isHorizontal) {
+            var currentCol = startCellCol
+            // Scan left to the beginning of the word
+            while (currentCol > 0) {
+                val cellState = gridModel[startCellRow][currentCol - 1]
+                if (cellState is CellState.Letter || cellState is CellState.LockedLetter) {
+                    currentCol--
+                } else {
+                    break
                 }
-                currentCol++
+            }
+            // Scan right, building the word
+            while (currentCol < numColumns) {
+                val cellState = gridModel[startCellRow][currentCol]
+                val char = when (cellState) {
+                    is CellState.Letter -> cellState.char
+                    is CellState.LockedLetter -> cellState.char
+                    else -> null
+                }
+                if (char != null) {
+                    wordBuilder.append(char)
+                    allWordCells.add(Pair(Pair(startCellRow, currentCol), char))
+                    currentCol++
+                } else {
+                    break
+                }
+            }
+        } else { // Vertical word
+            var currentRow = startCellRow
+            // Scan up to the beginning of the word
+            while (currentRow > 0) {
+                val cellState = gridModel[currentRow - 1][startCellCol]
+                if (cellState is CellState.Letter || cellState is CellState.LockedLetter) {
+                    currentRow--
+                } else {
+                    break
+                }
+            }
+            // Scan down, building the word
+            while (currentRow < numRows) {
+                val cellState = gridModel[currentRow][startCellCol]
+                val char = when (cellState) {
+                    is CellState.Letter -> cellState.char
+                    is CellState.LockedLetter -> cellState.char
+                    else -> null
+                }
+                if (char != null) {
+                    wordBuilder.append(char)
+                    allWordCells.add(Pair(Pair(currentRow, startCellCol), char))
+                    currentRow++
+                } else {
+                    break
+                }
             }
         }
-        // Vertical Line
-        else{
-            val col = firstCol
-            var currentRow = letterCells.minByOrNull {it.first.first}!!.first.first
 
-            // Scan up
-            while(currentRow > 0 && gridModel[currentRow - 1][col] is CellState.LockedLetter){
-                currentRow--
-            }
-            // Scan down
-            while(currentRow < numRows){
-                when (val cellState = gridModel[currentRow][col]) {
-                    is CellState.Letter -> {
-                        newWord.append(cellState.char)
-                        allWordCells.add(Pair(Pair(currentRow, col), cellState.char))
-                    }
-                    is CellState.LockedLetter -> {
-                        newWord.append(cellState.char)
-                        lockedLettersUsed++
-                    }
-                    else -> {
-                        // Stop at the first empty cell or obstacle
-                        break
-                    }
-                }
-                currentRow++
-            }
-        }
+        val word = wordBuilder.toString()
+        val lockedLettersUsed = allWordCells.count { cell -> newLetterCells.none { it.first == cell.first } }
 
-        val word = newWord.toString()
-
-        if(word.length < 2){
+        // Validate the word length and placement rules
+        if (word.length < 2 && newLetterCells.size > 1) { // Allow single letter additions if they form a longer word
             Toast.makeText(this, "Words must be at least 2 letters long", Toast.LENGTH_SHORT).show()
             render()
             return
         }
 
-        // Validate word and placement
         val isWordValid = validWords.contains(word)
         var isPlacementValid = true
         var placementErrorMsg = ""
 
-        // First word must cover the start tile
-        if (!isFirstWordPlayed) {
-            val startCoords = this.startTileCoords
-            if (startCoords == null|| allWordCells.none { it.first == startCoords }) {
+        if (word.length < 2) {
+            isPlacementValid = false
+            placementErrorMsg = "Words must be at least 2 letters long."
+        } else if (!isFirstWordPlayed) {
+            if (allWordCells.none { it.first == startTileCoords }) {
                 isPlacementValid = false
                 placementErrorMsg = "The first word must cover the Start (S) tile!"
             }
-        } else {
-            // All subsequent words must be connected to an existing tile
-            if (lockedLettersUsed == 0) {
-                isPlacementValid = false
-                placementErrorMsg = "New words must be connected to an existing letter"
+        } else{
+            val incorporatesLockedLetter = lockedLettersUsed > 0
+            var isAdjacentToLockedLetter = false
+
+            if (!incorporatesLockedLetter) {
+                for ((newCoords, _) in newLetterCells) {
+                    val (row, col) = newCoords
+                    // Check for a LockedLetter up, down, left, and right
+                    if ((row > 0 && gridModel[row - 1][col] is CellState.LockedLetter) ||
+                        (row < numRows - 1 && gridModel[row + 1][col] is CellState.LockedLetter) ||
+                        (col > 0 && gridModel[row][col - 1] is CellState.LockedLetter) ||
+                        (col < numColumns - 1 && gridModel[row][col + 1] is CellState.LockedLetter)) {
+                        isAdjacentToLockedLetter = true
+                        break // Found a connection, no need to check further
+                    }
+                }
             }
+            if (!incorporatesLockedLetter && !isAdjacentToLockedLetter) {
+                isPlacementValid = false
+                placementErrorMsg = "New words must connect to an existing letter."
+            }
+
         }
 
-        // Lock in word placement
+
+        // Results
         if (isWordValid && isPlacementValid) {
             // SUCCESS
             Toast.makeText(this, "'$word' is a valid word!", Toast.LENGTH_LONG).show()
 
-            // Lock ONLY the new letters
-            for ((coords, char) in allWordCells) {
-                val (row, col) = coords
-                gridModel[row][col] = CellState.LockedLetter(char)
+            // Create a mutable copy of the current hand to work with.
+            val tempHand = playerLetters.toMutableList()
+
+            // For each letter that was staged on the board, remove ONE instance from the temp hand.
+            newLetterCells.forEach { (_, char) ->
+                tempHand.remove(char)
             }
 
-            if (!isFirstWordPlayed) {
-                isFirstWordPlayed = true
-            }
+            // Clear original hand and repopulate it from the temp hand.
+            playerLetters.clear()
+            playerLetters.addAll(tempHand)
 
-            // Replenish tiles from the bag
-            val lettersUsedCount = allWordCells.size
-            val lettersToDraw = minOf(lettersUsedCount, tileBag.size)
+            // Lock letters on grid
+            newLetterCells.forEach { (coords, char) -> gridModel[coords.first][coords.second] = CellState.LockedLetter(char) }
+            isFirstWordPlayed = true
+
+            // Replenish player's hand up to 7 tiles
+            val tilesNeeded = 7 - playerLetters.size
+            val lettersToDraw = minOf(tilesNeeded, tileBag.size)
             if (lettersToDraw > 0) {
-                for (i in 0 until lettersToDraw) {
-                    playerLetters.add(tileBag.removeAt(0))
-                }
+                repeat(lettersToDraw) { playerLetters.add(tileBag.removeAt(0)) }
             }
-
         } else {
             // FAILURE
-            if (!isWordValid) {
-                Toast.makeText(this, "'$word' is not a valid word.", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, placementErrorMsg, Toast.LENGTH_LONG).show()
-            }
+            val errorMsg = if (!isWordValid) "'$word' is not a valid word." else placementErrorMsg
+            Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
         }
-
-        // Always re-render the entire UI
-        render()
+        render() // Render state of the game
     }
     private fun render(){
         renderGridFromModel()
+        renderLetterTray()
 
         // Update data in adapter
         if (::letterTrayAdapter.isInitialized) {
             letterTrayAdapter.updateLetters(playerLetters)
+        }
+    }
+    private fun recallLetters() {
+        val recalledLetters = mutableListOf<Char>()
+        var wasRecalled = false
+        for (row in 0 until numRows) {
+            for (col in 0 until numColumns) {
+                if (gridModel[row][col] is CellState.Letter) {
+                    wasRecalled = true
+
+                    // Reset grid cell
+                    if (startTileCoords?.first == row && startTileCoords?.second == col) {
+                        gridModel[row][col] = CellState.Start
+                    } else {
+                        gridModel[row][col] = CellState.Empty
+                    }
+                }
+            }
+        }
+
+        // Notify user
+        if (wasRecalled) {
+            Toast.makeText(this, "Tiles returned.", Toast.LENGTH_SHORT).show()
+        }
+        render() // Update grid and letter tray
+    }
+    private fun renderLetterTray(){
+        if (::letterTrayAdapter.isInitialized) {
+            letterTrayAdapter.updateLetters(playerLetters.toList())
         }
     }
     private val gridCellDragListener = View.OnDragListener { view, event ->
@@ -518,67 +561,52 @@ class MainActivity : AppCompatActivity() {
 
             DragEvent.ACTION_DROP -> {
                 destinationCell.alpha = 1.0f // Reset appearance
-
                 val destinationCoords = findViewCoordinates(destinationCell) ?: return@OnDragListener false
                 val (destRow, destCol) = destinationCoords
 
                 // Only allow drops on empty cells and the starting tile
-                if (gridModel[destRow][destCol] !is CellState.Empty && gridModel[destRow][destCol] !is CellState.Start ) {
-                    Toast.makeText(this, "Cell is not empty!", Toast.LENGTH_SHORT).show()
-                    return@OnDragListener false // Drop failed
+                if (gridModel[destRow][destCol] !is CellState.Empty && gridModel[destRow][destCol] !is CellState.Start) {
+                    return@OnDragListener false
                 }
 
                 // Check where the drag came from
                 when (event.clipDescription.label) {
                     "TRAY_DRAG" -> {
-                        // Dropping a letter from the tray
+                        // Get the letter from the ClipData
                         val item: ClipData.Item = event.clipData.getItemAt(0)
                         val droppedLetter = item.text.toString().first()
-                        val letterPosition = event.clipDescription.extras.getInt("position")
 
-                        // Update grid model
+                        // Stage the letter on the grid model.
                         gridModel[destRow][destCol] = CellState.Letter(droppedLetter)
 
-                        // Remove the letter from the player's hand data source.
-                        if (letterPosition < playerLetters.size) {
-                            playerLetters.removeAt(letterPosition)
-                        }
-
-                        // Re-render
-                        render()
-
+                        // Hide the original view from the tray.
+                        (event.localState as? View)?.visibility = View.INVISIBLE
                     }
                     "GRID_DRAG" -> {
                         // Move a letter from another grid cell
                         val item: ClipData.Item = event.clipData.getItemAt(0)
-                        val sourceCoordsString = item.text.toString().split(",")
-                        val sourceRow = sourceCoordsString[0].toInt()
-                        val sourceCol = sourceCoordsString[1].toInt()
+                        val (sourceRow, sourceCol) = item.text.toString().split(",").map { it.toInt() }
 
-                        // Get the letter from the source cell
                         val sourceState = gridModel[sourceRow][sourceCol]
                         if (sourceState is CellState.Letter) {
-                            // Move the letter
-                            gridModel[destRow][destCol] = sourceState // Place it in the new spot
-                            gridModel[sourceRow][sourceCol] = CellState.Empty // Clear the old spot
+                            gridModel[destRow][destCol] = sourceState
+                            gridModel[sourceRow][sourceCol] = CellState.Empty
                         }
                     }
                 }
 
-                // Re-render the entire grid to show the changes
-                render()
-                // Drop successful
+                renderGridFromModel() // Update grid
                 true
             }
 
             DragEvent.ACTION_DRAG_ENDED -> {
-                // Make sure cells are visible after the drag ends
-                if(!event.result){
+                // Always reset cell's appearance.
+                destinationCell.alpha = 1.0f
+
+                // If the drop was not successful, the original view must become visible again.
+                if (!event.result) {
                     (event.localState as? View)?.visibility = View.VISIBLE
                 }
-
-                // Successfully ended
-                destinationCell.alpha = 1.0f
                 true
             }
             else -> false
@@ -608,74 +636,31 @@ class MainActivity : AppCompatActivity() {
 
                 // Get the coordinates of the tile that was being dragged from the grid
                 val item: ClipData.Item = event.clipData.getItemAt(0)
-                val sourceCoordsString = item.text.toString().split(",")
-                val sourceRow = sourceCoordsString[0].toInt()
-                val sourceCol = sourceCoordsString[1].toInt()
+                val (sourceRow, sourceCol) = item.text.toString().split(",").map { it.toInt() }
 
-                // Find out what letter was at that coordinate
                 val sourceState = gridModel[sourceRow][sourceCol]
                 if (sourceState is CellState.Letter) {
-                    val returnedChar = sourceState.char
-
-                    // Update data models
-                    // 1. Add the letter back to the player's hand (the data list)
-                    playerLetters.add(returnedChar)
-
-                    // 2. Set the grid cell it came from back to Empty
-                    gridModel[sourceRow][sourceCol] = CellState.Empty
+                    if (startTileCoords?.first == sourceRow && startTileCoords?.second == sourceCol) {
+                        gridModel[sourceRow][sourceCol] = CellState.Start
+                    } else {
+                        gridModel[sourceRow][sourceCol] = CellState.Empty
+                    }
 
                     // Update UI
                     render()
-
-                    Log.d("DragDrop", "Returned '$returnedChar' from ($sourceRow, $sourceCol) to the letter tray.")
                 }
                 true // Successful drop
             }
             DragEvent.ACTION_DRAG_ENDED -> {
                 // Reset background
                 view.setBackgroundColor(Color.TRANSPARENT)
-                // Make sure the original tile view becomes visible again if the drop failed
+                // Make tile view visible again if drop failed
                 if (!event.result) {
                     (event.localState as? View)?.visibility = View.VISIBLE
                 }
                 true
             }
             else -> false
-        }
-    }
-    private fun recallLetters(){
-        // Temp list to hold letters being recalled
-        val recalledLetters = mutableListOf<Char>()
-
-        // Iterate through grid
-        for (row in 0 until numRows) {
-            for (col in 0 until numColumns) {
-                val cellState = gridModel[row][col]
-
-                // Check if cell contains a new letter
-                if (cellState is CellState.Letter) {
-                    // Add the letter to temporary list
-                    recalledLetters.add(cellState.char)
-
-                    // Check if this position is the original Start tile's position
-                    if (startTileCoords?.first == row && startTileCoords?.second == col) {
-                        gridModel[row][col] = CellState.Start
-                    } else {
-                        gridModel[row][col] = CellState.Empty
-                    }
-                }
-            }
-        }
-
-        // Recall letters
-        if(recalledLetters.isNotEmpty()){
-            // Add recalled letters back to hand
-            playerLetters.addAll(recalledLetters)
-
-            Toast.makeText(this, "Tiles returned to your hand", Toast.LENGTH_SHORT).show()
-            render() // Update grid and letter tray
-        } else{
-            Toast.makeText(this, "No tiles to recall", Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -716,35 +701,35 @@ class LetterTrayAdapter(private val letters: MutableList<Char>) :
         val letter = letters[position]
         holder.textView.text = letter.toString()
 
-        // Set up the drag-and-drop starter
-        holder.itemView.setOnLongClickListener { view ->
-            val currentPosition = holder.adapterPosition
-            if (currentPosition == RecyclerView.NO_POSITION) return@setOnLongClickListener false
+        holder.textView.setOnTouchListener { view, event ->
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                val letterChar = (view as TextView).text.toString()
 
-            val clipText = letters[currentPosition].toString()
-            val item = ClipData.Item(clipText)
-            val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
+                // Prepare the data to be dragged
+                val clipText = letterChar
+                val item = ClipData.Item(clipText)
+                val mimeTypes = arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
+                val clipData = ClipData("TRAY_DRAG", mimeTypes, item)
 
-            // We now use the "TRAY_DRAG" label as intended.
-            val data = ClipData("TRAY_DRAG", mimeTypes, item)
+                // Add the letter's position to the ClipData so we know which one to remove later.
+                val extras = PersistableBundle().apply { putInt("position", holder.adapterPosition) }
+                clipData.description.extras = extras
 
-            val extras = PersistableBundle()
-            extras.putInt("position", currentPosition)
-            data.description.extras = extras
+                // Instantiate the drag shadow builder.
+                val dragShadow = View.DragShadowBuilder(view)
 
-            val dragShadow = View.DragShadowBuilder(view)
+                // Start the drag.
+                view.startDragAndDrop(clipData, dragShadow, view, 0)
 
-            // Start the drag. The view passed as the 3rd argument is the `localState`.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                view.startDragAndDrop(data, dragShadow, view, 0)
+                // Hide the original view immediately to give the feel of "picking it up".
+                view.visibility = View.INVISIBLE
+
+                // Return true to indicate we've handled the touch event.
+                true
             } else {
-                @Suppress("DEPRECATION")
-                view.startDrag(data, dragShadow, view, 0)
+                // Return false for all other touch actions so they are not consumed.
+                false
             }
-
-            // Make the original view invisible. This is correct.
-            view.visibility = View.INVISIBLE
-            true
         }
     }
 
