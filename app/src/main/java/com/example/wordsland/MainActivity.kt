@@ -36,21 +36,23 @@ sealed class CellState {
     data class LockedLetter (val char: Char): CellState() // entered words
 }
 class MainActivity : AppCompatActivity() {
-    // In your Activity or a ViewModel
+    //  ----------------------  Properties  ----------------------
     private val handSize = 8
     private val numColumns = 15
     private val numRows = 24
     private val validWords = mutableSetOf<String>()
     private var isFirstWordPlayed = false
     private var startTileCoords: Pair<Int, Int>? = null
+    private var targetTileCoords: Pair<Int, Int>? = null
     private val tileBag = mutableListOf<Char>()
     private val gridModel = Array(numRows) {
         Array<CellState>(numColumns) {
             CellState.Empty
         }
     }
+    private var currentRound = 1
+    private lateinit var roundCounterTextView: TextView
 
-    //  ----------------------  Properties  ----------------------
     private lateinit var gridLayout: GridLayout
     private lateinit var cellViews: Array<Array<TextView>>
     private lateinit var letterTrayRecycler: RecyclerView
@@ -66,7 +68,8 @@ class MainActivity : AppCompatActivity() {
         // Set views
         gridLayout = findViewById(R.id.grid)
 
-        letterTrayRecyclerView = findViewById(R.id.letter_tray_recycler)
+        roundCounterTextView = findViewById(R.id.round_counter_text)
+        letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
         val enterButton: Button = findViewById(R.id.enter_word_button)
         val returnButton: Button = findViewById(R.id.return_tiles_button)
 
@@ -83,13 +86,13 @@ class MainActivity : AppCompatActivity() {
         // Initialize the adapter with the starting hand.
         letterTrayAdapter = LetterTrayAdapter(playerLetters)
         // Set the adapter on the RecyclerView.
-        letterTrayRecyclerView.adapter = letterTrayAdapter
+        letterTrayRecycler.adapter = letterTrayAdapter
         // Set the layout manager (how the items are arranged).
-        letterTrayRecyclerView.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        letterTrayRecycler.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
 
 
-        // --- 4. SET LISTENERS ---
-        letterTrayRecyclerView.setOnDragListener(letterTrayDragListener) // For dropping tiles back onto the tray.
+        // Set Listeners
+        letterTrayRecycler.setOnDragListener(letterTrayDragListener) // For dropping tiles back onto the tray.
         enterButton.setOnClickListener {
             checkWord()
         }
@@ -97,8 +100,7 @@ class MainActivity : AppCompatActivity() {
             recallLetters()
         }
 
-        // --- 5. CREATE GRID & PERFORM FINAL RENDER ---
-        // This gridLayout.post block is an excellent way to ensure the grid has been measured.
+        // Final render
         gridLayout.post {
             val maxCellWidth = gridLayout.width / numColumns
             val maxCellHeight = gridLayout.height / numRows
@@ -110,7 +112,7 @@ class MainActivity : AppCompatActivity() {
             initializeGridModel()
             createVisualGrid(cellSize)
 
-            // The first render call which will draw both the grid and the letter tray correctly.
+            // The first render call to draw both the grid and the letter tray
             render()
         }
 
@@ -300,9 +302,10 @@ class MainActivity : AppCompatActivity() {
         // Place the Target point
         val targetCoords = availableCoordinates.removeAt(0)
         gridModel[targetCoords.first][targetCoords.second] = CellState.Target
+        this.targetTileCoords = targetCoords
 
         // Place the Obstacles
-        val numberOfObstacles = 10
+        val numberOfObstacles = 20
 
         if(availableCoordinates.size < 2 + numberOfObstacles){
             Log.e("WordsLand", "Error: Grid is too small to place Start, Target, and all Obstacles")
@@ -339,8 +342,9 @@ class MainActivity : AppCompatActivity() {
         val newLetterCells = mutableListOf<Pair<Pair<Int, Int>, Char>>()
         for (row in 0 until numRows) {
             for (col in 0 until numColumns) {
-                if (gridModel[row][col] is CellState.Letter) {
-                    newLetterCells.add(Pair(Pair(row, col), (gridModel[row][col] as CellState.Letter).char))
+                val cellState = gridModel[row][col]
+                if (cellState is CellState.Letter) {
+                    newLetterCells.add(Pair(Pair(row, col), cellState.char))
                 }
             }
         }
@@ -468,21 +472,29 @@ class MainActivity : AppCompatActivity() {
 
         }
 
-
-        // Results
+        // ---------------------------------
+        //              Results
+        // ---------------------------------
+        // Word accepted
         if (isWordValid && isPlacementValid) {
-            // SUCCESS
-            Toast.makeText(this, "'$word' is a valid word!", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "'$word' is a valid word!", Toast.LENGTH_SHORT).show()
 
-            // Create a mutable copy of the current hand to work with.
+            // Check if end tile has been covered
+            val hasReachedTarget = if (targetTileCoords != null) {
+                newLetterCells.any { (coords, _) -> coords == targetTileCoords }
+            } else {
+                false
+            }
+
+            // Create a mutable copy of the current hand
             val tempHand = playerLetters.toMutableList()
 
-            // For each letter that was staged on the board, remove ONE instance from the temp hand.
+            // Remove an instance from the temp hand for every tile used
             newLetterCells.forEach { (_, char) ->
                 tempHand.remove(char)
             }
 
-            // Clear original hand and repopulate it from the temp hand.
+            // Update original hand from updated temp version
             playerLetters.clear()
             playerLetters.addAll(tempHand)
 
@@ -490,34 +502,32 @@ class MainActivity : AppCompatActivity() {
             newLetterCells.forEach { (coords, char) -> gridModel[coords.first][coords.second] = CellState.LockedLetter(char) }
             isFirstWordPlayed = true
 
-            // Get the original coordinates of the Target tile.
-            val targetCoords = Pair(0, numColumns - 1) // Must match what's in initializeGridModel()
-
-            // Check if any of the newly placed letters are on the target tile's coordinates.
-            val hasReachedTarget = newLetterCells.any { (coords, _) -> coords == targetCoords }
-
+            // // GAME OVER
             if (hasReachedTarget) {
-                // GAME OVER!
-                showGameOverDialog()
-                return // Stop further execution, like rendering.
+                showNextRoundDialog()
+                return // Stop further execution and rendering
             }
 
-            // Replenish player's hand up to 7 tiles
+            // GAME ON
+            // Replenish player's hand up to 8 tiles
             val tilesNeeded = handSize - playerLetters.size
             val lettersToDraw = minOf(tilesNeeded, tileBag.size)
             if (lettersToDraw > 0) {
                 repeat(lettersToDraw) { playerLetters.add(tileBag.removeAt(0)) }
             }
         } else {
-            // FAILURE
+            // Word NOT accepted
             val errorMsg = if (!isWordValid) "'$word' is not a valid word." else placementErrorMsg
             Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
         }
         render() // Render state of the game
     }
+
     private fun render(){
         renderGridFromModel()
         renderLetterTray()
+
+        roundCounterTextView.text = "Round: $currentRound"
 
         // Update data in adapter
         if (::letterTrayAdapter.isInitialized) {
@@ -553,14 +563,13 @@ class MainActivity : AppCompatActivity() {
             letterTrayAdapter.updateLetters(playerLetters.toList())
         }
     }
-    private fun showGameOverDialog() {
+    private fun showNextRoundDialog() {
         // Announce winner with AlertDialog
         AlertDialog.Builder(this)
             .setTitle("Congratulations!")
-            .setMessage("You have reached the target and won the game!")
-            .setPositiveButton("Play Again") { _, _ ->
-                // TODO: Add logic to restart the game.
-                recreate() // Simple way to restart the activity.
+            .setMessage("You have reached the target and won the round!")
+            .setPositiveButton("Next Round") { _, _ ->
+                startNewRound()
             }
             .setNegativeButton("Close") { dialog, _ ->
                 dialog.dismiss()
@@ -568,6 +577,19 @@ class MainActivity : AppCompatActivity() {
             }
             .setCancelable(false) // Prevent user from dismissing the dialog by tapping outside.
             .show()
+    }
+
+    private fun startNewRound() {
+        currentRound++
+        isFirstWordPlayed = false
+        initializeGridModel()
+        initializeTileBag()
+        playerLetters.clear()
+        val lettersToDraw = minOf(handSize, tileBag.size)
+        repeat(lettersToDraw) {
+            playerLetters.add(tileBag.removeAt(0))
+        }
+        render()
     }
     private val gridCellDragListener = View.OnDragListener { view, event ->
         val destinationCell = view as TextView
@@ -698,5 +720,4 @@ class MainActivity : AppCompatActivity() {
             else -> false
         }
     }
-    private lateinit var letterTrayRecyclerView: RecyclerView
 }
