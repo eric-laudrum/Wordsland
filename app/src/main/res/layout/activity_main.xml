@@ -60,12 +60,12 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/header"
-        app:layout_constraintBottom_toTopOf="@+id/letter_tray_recycler"
+        app:layout_constraintBottom_toTopOf="@+id/letter_tray_recycler_view"
         />
 
     <!-- Player Tiles -->
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/letter_tray_recycler"
+        android:id="@+id/letter_tray_recycler_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:overScrollMode="never"
@@ -104,10 +104,17 @@
             />
 
         <Button
-            android:id="@+id/return_tiles_button"
+            android:id="@+id/recall_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Recall"
+            />
+
+        <Button
+            android:id="@+id/swap_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Swap"
             />
 
 

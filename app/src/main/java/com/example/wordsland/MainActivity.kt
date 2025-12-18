@@ -55,9 +55,14 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var gridLayout: GridLayout
     private lateinit var cellViews: Array<Array<TextView>>
-    private lateinit var letterTrayRecycler: RecyclerView
     private lateinit var letterTrayAdapter: LetterTrayAdapter
     private val playerLetters = mutableListOf<Char>()
+    // Swap tiles
+    private var isSwapModeActive = false
+    private val tilesToSwap = mutableSetOf<Int>()
+    private lateinit var swapButton: Button
+    private lateinit var recallButton: Button
+    private lateinit var letterTrayRecyclerView: RecyclerView
 
 
     //  ----------------------  Create  ----------------------
@@ -68,10 +73,14 @@ class MainActivity : AppCompatActivity() {
         // Set views
         gridLayout = findViewById(R.id.grid)
 
+        recallButton = findViewById(R.id.recall_button)
+        swapButton = findViewById(R.id.swap_button)
+
+
         roundCounterTextView = findViewById(R.id.round_counter_text)
-        letterTrayRecycler = findViewById(R.id.letter_tray_recycler)
+        letterTrayRecyclerView = findViewById(R.id.letter_tray_recycler_view)
         val enterButton: Button = findViewById(R.id.enter_word_button)
-        val returnButton: Button = findViewById(R.id.return_tiles_button)
+        val returnButton: Button = findViewById(R.id.recall_button)
 
         initializeTileBag()
 
@@ -83,21 +92,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Initialize the adapter with the starting hand.
-        letterTrayAdapter = LetterTrayAdapter(playerLetters)
-        // Set the adapter on the RecyclerView.
-        letterTrayRecycler.adapter = letterTrayAdapter
-        // Set the layout manager (how the items are arranged).
-        letterTrayRecycler.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-
 
         // Set Listeners
-        letterTrayRecycler.setOnDragListener(letterTrayDragListener) // For dropping tiles back onto the tray.
+        letterTrayRecyclerView.setOnDragListener(letterTrayDragListener)
         enterButton.setOnClickListener {
             checkWord()
         }
         returnButton.setOnClickListener {
             recallLetters()
+        }
+
+        swapButton.setOnClickListener {
+            handleSwapButtonClick()
         }
 
         // Final render
@@ -109,10 +115,13 @@ class MainActivity : AppCompatActivity() {
             gridLayout.columnCount = numColumns
             gridLayout.rowCount = numRows
 
-            initializeGridModel()
+            // Create the main game grid
             createVisualGrid(cellSize)
 
-            // The first render call to draw both the grid and the letter tray
+            // Initialize the data for the first time
+            initializeGridModel()
+
+            // Initial render
             render()
         }
 
@@ -522,46 +531,62 @@ class MainActivity : AppCompatActivity() {
         }
         render() // Render state of the game
     }
-
     private fun render(){
         renderGridFromModel()
         renderLetterTray()
 
         roundCounterTextView.text = "Round: $currentRound"
 
-        // Update data in adapter
-        if (::letterTrayAdapter.isInitialized) {
-            letterTrayAdapter.updateLetters(playerLetters)
-        }
     }
     private fun recallLetters() {
         val recalledLetters = mutableListOf<Char>()
         var wasRecalled = false
         for (row in 0 until numRows) {
             for (col in 0 until numColumns) {
-                if (gridModel[row][col] is CellState.Letter) {
+                val cellState = gridModel[row][col]
+                if (cellState is CellState.Letter) {
                     wasRecalled = true
+                    recalledLetters.add(cellState.char)
 
-                    // Reset grid cell
-                    if (startTileCoords?.first == row && startTileCoords?.second == col) {
-                        gridModel[row][col] = CellState.Start
-                    } else {
-                        gridModel[row][col] = CellState.Empty
+                    // Reset the cell
+                    when (Pair(row, col)) {
+                        startTileCoords -> gridModel[row][col] = CellState.Start
+                        targetTileCoords -> gridModel[row][col] = CellState.Target // This line is the fix
+                        else -> gridModel[row][col] = CellState.Empty
                     }
                 }
             }
         }
 
-        // Notify user
+        // Return recalled letters to the letter tray
+        playerLetters.addAll(recalledLetters)
+
         if (wasRecalled) {
             Toast.makeText(this, "Tiles returned.", Toast.LENGTH_SHORT).show()
         }
         render() // Update grid and letter tray
     }
     private fun renderLetterTray(){
-        if (::letterTrayAdapter.isInitialized) {
-            letterTrayAdapter.updateLetters(playerLetters.toList())
-        }
+        letterTrayRecyclerView.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+
+        letterTrayRecyclerView.adapter = LetterTrayAdapter(
+            letters = playerLetters,
+            // Pass new state to the adapter
+            isSwapMode = isSwapModeActive,
+            selectedForSwap = tilesToSwap,
+            onTileClick = { position ->
+                if (isSwapModeActive) {
+                    // If in swap mode, toggle the selection
+                    if (tilesToSwap.contains(position)) {
+                        tilesToSwap.remove(position)
+                    } else {
+                        tilesToSwap.add(position)
+                    }
+                    // Show the change in highlight
+                    renderLetterTray()
+                }
+            }
+        )
     }
     private fun showNextRoundDialog() {
         // Announce winner with AlertDialog
@@ -578,7 +603,6 @@ class MainActivity : AppCompatActivity() {
             .setCancelable(false) // Prevent user from dismissing the dialog by tapping outside.
             .show()
     }
-
     private fun startNewRound() {
         currentRound++
         isFirstWordPlayed = false
@@ -590,6 +614,42 @@ class MainActivity : AppCompatActivity() {
             playerLetters.add(tileBag.removeAt(0))
         }
         render()
+    }
+    private fun handleSwapButtonClick() {
+        if (!isSwapModeActive) {
+            // Activate swap mode
+            isSwapModeActive = true
+            swapButton.text = "Confirm Swap"
+            recallButton.isEnabled = false // Disable recall button during swap
+            // Clear any previous selections
+            tilesToSwap.clear()
+        } else {
+            // Confirm swap
+            if (tilesToSwap.isNotEmpty()) {
+                // Get the letters to be returned to the bag
+                val lettersToReturn = tilesToSwap.map { playerLetters[it] }.toMutableList()
+                tileBag.addAll(lettersToReturn)
+                tileBag.shuffle()
+
+                // Remove swapped letters from the tile tray
+                tilesToSwap.sortedDescending().forEach { playerLetters.removeAt(it) }
+
+                // Draw new letters to replace the swapped ones
+                val lettersToDraw = minOf(lettersToReturn.size, tileBag.size)
+                repeat(lettersToDraw) {
+                    playerLetters.add(tileBag.removeAt(0))
+                }
+            }
+
+            // Exit swap mode
+            isSwapModeActive = false
+            swapButton.text = "Swap"
+            recallButton.isEnabled = true
+            tilesToSwap.clear()
+        }
+
+        // Re-render the letter tray to show highlights or the new tiles
+        renderLetterTray()
     }
     private val gridCellDragListener = View.OnDragListener { view, event ->
         val destinationCell = view as TextView
