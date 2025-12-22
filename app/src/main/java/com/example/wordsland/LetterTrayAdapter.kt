@@ -5,20 +5,29 @@ import android.content.ClipDescription
 import android.os.Build
 import android.os.PersistableBundle
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import java.util.Collections
 
+// Callback for moving items in the RecyclerView
+interface ItemMoveListener {
+    fun onItemMove(fromPosition: Int, toPosition: Int)
+}
+
+// Letter Tray / Player's hand
 class LetterTrayAdapter(
-    private var letters: List<Char>,
+    private var letters: MutableList<Char>,
     private val isSwapMode: Boolean,
     private val selectedForSwap: Set<Int>,
     private val onTileClick: (Int) -> Unit
-) : RecyclerView.Adapter<LetterTrayAdapter.ViewHolder>() {
+) : RecyclerView.Adapter<LetterTrayAdapter.ViewHolder>(), ItemMoveListener {
 
+    // ViewHolder class to wrap the TileView
     inner class ViewHolder(val tileView: TileView) : RecyclerView.ViewHolder(tileView) {
         init {
-            // This click listener now correctly handles clicks in swap mode
+            // Handle tile taps events
             tileView.setOnClickListener {
                 if (adapterPosition != RecyclerView.NO_POSITION) {
                     onTileClick(adapterPosition)
@@ -27,68 +36,93 @@ class LetterTrayAdapter(
         }
     }
 
+    // Inflate and create TileView for each letter
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val inflater = LayoutInflater.from(parent.context)
-        // Ensure you are using a layout file that contains a TileView
+
         val tileView = inflater.inflate(R.layout.list_item_tile, parent, false) as TileView
         return ViewHolder(tileView)
     }
 
+    // Return the number of tiles in the tray
     override fun getItemCount() = letters.size
 
-    // 2. onBindViewHolder MUST BE UPDATED
+
+    // Bind letter data to the TileView
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val letter = letters[position]
+
+        // Set the letter and visibility
         holder.tileView.text = letter.toString()
         holder.tileView.visibility = View.VISIBLE
 
-        // 3. ADD LOGIC TO HANDLE SWAP MODE VS. NORMAL MODE
+
+        // Swap letters is ACTIVE
         if (isSwapMode) {
-            // --- IN SWAP MODE ---
-            // A. Disable dragging
+
+            // Disable dragging during swap mode
             holder.tileView.setOnLongClickListener(null)
             holder.tileView.setOnTouchListener(null)
 
-            // B. Set background based on whether the tile is selected for swapping
+            // Highlight the tiles to swap
             when {
                 selectedForSwap.contains(position) ->
-                    // Bright highlight for selected tiles
-                    holder.tileView.setBackgroundResource(R.drawable.swap_tile_highlight_background)
+                    // Bright highlight for active tiles
+                    holder.tileView.setBackgroundResource(
+                        R.drawable.swap_tile_highlight_background)
                 else ->
-                    // Light highlight for all other tiles in swap mode
-                    holder.tileView.setBackgroundResource(R.drawable.swap_tile_background)
+                    // Dim highlight to indicate swap mode is active
+                    holder.tileView.setBackgroundResource(
+                        R.drawable.swap_tile_background)
             }
         } else {
-            // --- IN NORMAL (DRAG) MODE ---
-            // A. Set the default background
+            // Normal Play Mode (Swap inactive)
+            // Set the background to default
             holder.tileView.setBackgroundResource(R.drawable.cell_background) // Use your default background
 
-            // B. Re-enable dragging logic
-            holder.tileView.setOnLongClickListener { view ->
-                val letterChar = (view as TileView).text.toString()
-                val item = ClipData.Item(letterChar)
-                val dragData = ClipData(
-                    "TRAY_DRAG",
-                    arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN),
-                    item
-                )
-                // Pass the adapter position so we can remove the tile from the hand
-                dragData.description.extras = PersistableBundle().apply { putInt("position", position) }
-                val shadowBuilder = View.DragShadowBuilder(view)
+            // Enable drag to place tiles from tray to board
+            holder.tileView.setOnLongClickListener(null)
+            holder.tileView.setOnTouchListener { view, event ->
+                if (event.action == MotionEvent.ACTION_DOWN) {
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    view.startDragAndDrop(dragData, shadowBuilder, view, 0)
+                    // Create drag data for the letter
+                    val letterChar = (view as TileView).text.toString()
+                    val item = ClipData.Item(letterChar)
+                    val dragData = ClipData(
+                        "TRAY_DRAG",
+                        arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN),
+                        item
+                    )
+
+                    // Store the adapter position for later removal
+                    dragData.description.extras = PersistableBundle().apply { putInt("position", position) }
+
+                    // Build a drag shadow
+                    val shadowBuilder = View.DragShadowBuilder(view)
+
+                    // Start the drag
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        view.startDragAndDrop(dragData, shadowBuilder, view, 0)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        view.startDrag(dragData, shadowBuilder, view, 0)
+                    }
+                    true
                 } else {
-                    @Suppress("DEPRECATION")
-                    view.startDrag(dragData, shadowBuilder, view, 0)
+                    false
                 }
-                true
             }
         }
     }
-
+    // Replace all letters in the tray and refresh the list
     fun updateLetters(newLetters: List<Char>) {
-        this.letters = newLetters
+        this.letters = newLetters.toMutableList()
         notifyDataSetChanged()
+    }
+
+    // Reorder tiles in the tray
+    override fun onItemMove(fromPosition: Int, toPosition: Int) {
+        Collections.swap(letters, fromPosition, toPosition)
+        notifyItemMoved(fromPosition, toPosition)
     }
 }

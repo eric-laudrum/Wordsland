@@ -6,45 +6,78 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity"
-    android:background="@color/green"
+    android:background="@color/darker_green"
     >
 
 
-
+    <!-- HEADER -->
     <LinearLayout
         android:id="@+id/header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/green"
+
         android:orientation="horizontal"
+        android:background="@color/darker_green"
+
+        android:paddingTop="20dp"
+
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         >
 
+        <!-- TITLE -->
         <EditText
             android:id="@+id/title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="25dp"
-            android:text="Wordsland"
-            android:textColor="@color/white"
-            android:textSize="40sp" />
 
-        <TextView
-            android:id="@+id/round_counter_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:textSize="25sp"
-            android:textStyle="bold"
-            android:textColor="@color/white"
-            android:layout_gravity="bottom"
-            android:layout_marginStart="50dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:text="Round: 1" />
+            android:text="Wordsland"
+            android:textColor="@color/light_green"
+            android:textSize="40sp"
+
+            android:layout_marginTop="25dp"
+            />
+
+        <!-- HEADER VALUES (round & tiles left) -->
+        <LinearLayout
+            android:id="@+id/header_values"
+            android:layout_width="194dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+
+
+            >
+
+            <!-- ROUND / LEVEL NUMBER -->
+            <TextView
+                android:id="@+id/round_counter_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+
+                android:layout_gravity="center"
+                android:layout_marginTop="16dp"
+                android:textColor="@color/light_green"
+
+                android:textSize="20sp"
+                android:textStyle="bold"
+                tools:text="Round: 1" />
+            <!-- TILES LEFT IN BAG -->
+            <!-- TODO: turn this into a bag icon with a number badge-->
+            <TextView
+                android:id="@+id/tiles_left_counter_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+
+                android:layout_gravity="center"
+                android:layout_marginTop="16dp"
+                android:text="LOADING..."
+                android:textColor="@color/light_green"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                tools:text="Tiles: 188" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
@@ -57,10 +90,10 @@
 
         android:background="@color/darker_green"
 
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/header"
         app:layout_constraintBottom_toTopOf="@+id/letter_tray_recycler_view"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         />
 
     <!-- Player Tiles -->
@@ -72,10 +105,8 @@
 
         android:background="@color/green"
 
-
-
         android:clipToPadding="false"
-        android:layout_marginBottom="25dp"
+        android:layout_marginBottom="10dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/button_bar"
@@ -93,6 +124,7 @@
         android:orientation="horizontal"
         android:gravity="center"
         android:background="@color/green"
+        android:paddingBottom="25dp"
 
         >
 
@@ -100,7 +132,10 @@
             android:id="@+id/enter_word_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+
             android:text="Enter"
+            android:textColor="@color/darker_green"
+            android:backgroundTint="@color/light_green"
             />
 
         <Button
@@ -108,6 +143,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Recall"
+            android:textColor="@color/darker_green"
+            android:backgroundTint="@color/light_green"
             />
 
         <Button
@@ -115,6 +152,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Swap"
+            android:textColor="@color/darker_green"
+            android:backgroundTint="@color/light_green"
             />
 
 
